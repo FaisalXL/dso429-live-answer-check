@@ -1,102 +1,106 @@
-# Live Answer Check — midterm extra-credit demo
+# Live Answer Check
 
-Students type an answer; a local embedding model computes live cosine
-similarity against several valid reference answers (max score wins) and
-renders it as a live pixel meter that updates continuously while they type.
-Below a threshold, a capped "Get a hint" button calls an LLM (OpenRouter)
-for a short nudge — never the answer itself.
+Students type an answer. A local embedding model computes cosine
+similarity against multiple reference answers. The system displays the
+highest score as a live meter. Below a threshold, students can request an
+LLM hint. The system limits hints per student.
 
-**Status:** working demo, presented to Professor Charlie and well received.
-Question/reference content is still a placeholder — swap in the real
-midterm question before exam day (`QUESTION_TEXT` and `REFERENCE_ANSWERS`
-in `backend/main.py`).
+**Status:** Working demo. The question and reference answers are
+placeholders. Replace `QUESTION_TEXT` and `REFERENCE_ANSWERS` in
+`backend/main.py` with real midterm content before the exam.
 
-## Run it
+## Setup
+
+Run these commands:
 
 ```bash
 cd extra-credit-pixel-display
-source .venv/bin/activate   # venv already has fastapi/uvicorn/sentence-transformers installed
+source .venv/bin/activate
 uvicorn backend.main:app --reload --port 8001
 ```
 
-Then open http://localhost:8001
+Open http://localhost:8001 in a browser.
 
-First boot downloads the embedding model (~80MB, one-time, cached after).
+The first run downloads the embedding model (about 80MB). The system
+caches the model after the first download.
 
-## Config
+## Configuration
 
-Copy `.env.example` to `.env` and fill in:
+Copy `.env.example` to `.env`. Set these values:
 
-- `OPENROUTER_API_KEY` — required for hints to work (similarity meter works without it)
-- `OPENROUTER_MODEL` — defaults to `openai/gpt-4o-mini`
-- `SIMILARITY_THRESHOLD` — 0-1, default 0.55, where the hint button unlocks
-- `MAX_HINTS` — hints allowed per student session, default 3
-- `DEMO_MODE` — `true` exposes `/api/reveal-answer` and a "reveal reference
-  answer" toggle + "matched reference" label in the UI, for demoing.
-  **Must be `false` for any run with real students** — it hands them the
-  answer key.
+- `OPENROUTER_API_KEY`: Required for hints. The similarity meter works
+  without this key.
+- `OPENROUTER_MODEL`: Defaults to `openai/gpt-4o-mini`.
+- `SIMILARITY_THRESHOLD`: A value from 0 to 1. Default: 0.55. This value
+  sets when the hint button unlocks.
+- `MAX_HINTS`: Maximum hints per student session. Default: 3.
+- `DEMO_MODE`: Set to `true` to expose `/api/reveal-answer` and show the
+  matched reference in the interface. Set to `false` for real students.
+  This setting exposes the answer key when true.
 
-## How it works
+## System design
 
-- **Similarity engine:** `sentence-transformers` (`all-MiniLM-L6-v2`), fully
-  local, no external call. The reference answers are embedded once at
-  startup; each student update is embedded and compared via cosine
-  similarity against all references, and the **max** score is used.
-- **Multiple reference answers:** `REFERENCE_ANSWERS` in `backend/main.py`
-  holds several differently-worded, equally-correct phrasings of the answer
-  (see "Known limitations" below for why this matters).
-- **Live-typing feel:** the frontend throttles to one WebSocket update every
-  ~180ms *while actively typing* (not just after a pause), so the meter
-  visibly ticks the whole time someone writes, plus a smooth count-up
-  animation on the displayed number.
-- **Concurrency:** each embedding call runs in a background thread
-  (`asyncio.to_thread`), and PyTorch is capped to 1 thread per call
-  (`torch.set_num_threads(1)`) so the thread pool can genuinely parallelize
-  across students instead of each call hogging all CPU cores. Load-tested:
-  40 students continuously typing for 8 sustained seconds → p50 latency
-  89ms, p95 237ms, on an 8-core machine. Re-test on the actual deployment
-  host before exam day; throughput scales with core count.
-- **Hints:** on-demand only (button click, not automatic), capped per
-  session, calls OpenRouter with all reference phrasings as context so it
-  can nudge based on whichever the student is closest to.
+**Similarity engine:** The system uses `sentence-transformers` with the
+`all-MiniLM-L6-v2` model. The model runs locally. The system makes no
+external calls for similarity scoring. The system embeds all reference
+answers at startup. The system embeds each student update and compares it
+against all references. The system reports the maximum similarity score.
 
-## Known limitations (read before trusting the score for grading)
+**Multiple reference answers:** `REFERENCE_ANSWERS` in `backend/main.py`
+stores several correct phrasings of the same answer. See "Known
+limitations" for the reason.
 
-Cosine similarity measures topical/semantic *proximity*, not correctness.
-Tested empirically against this exact model+question:
+**Live typing behavior:** The frontend sends a WebSocket update every
+180ms during active typing. A standard debounce only updates after the
+user stops typing; this system updates continuously instead. The frontend
+animates the displayed score for smooth transitions.
+
+**Concurrency:** The system runs each embedding call in a background
+thread using `asyncio.to_thread`. The system limits PyTorch to one thread
+per call using `torch.set_num_threads(1)`. This setting allows the thread
+pool to parallelize calls across CPU cores.
+
+Test conditions: 40 simultaneous connections, 8 seconds of continuous
+typing, on an 8-core machine.
+- Median latency: 89ms.
+- 95th-percentile latency: 237ms.
+- Throughput scales with CPU core count. Retest on the deployment host
+  before the exam.
+
+**Hints:** Hints require a button click. The system caps hints per
+session. The hint prompt includes all reference phrasings.
+
+## Known limitations
+
+Cosine similarity measures topic proximity. It does not measure
+correctness. Test results against this model and question:
 
 | Case | Similarity |
 |---|---|
 | Reference answer itself | 100% |
-| Wrong logic, but uses reference vocabulary densely | **84%** |
-| Plain keyword list, no actual reasoning | 70% |
-| Correct answer, independently-worded (not one of the 3 references) | 62% → **80%** with multi-reference |
-| On-topic but doesn't answer the question | 25-28% |
+| Wrong logic, dense reference vocabulary | 84% |
+| Keyword list, no reasoning | 70% |
+| Correct answer, independent wording, single reference | 62% |
+| Correct answer, independent wording, multiple references | 80% |
+| On-topic, does not answer the question | 25-28% |
 
-**Multiple reference answers (this feature) fixes false negatives** — a
-correct answer phrased differently now scores fairly, because it just needs
-to be close to *any* valid phrasing, not one specific one. Tested in
-`scratchpad`-style scripts before shipping (see git history / conversation
-log for the raw numbers).
+Multiple reference answers reduce false negatives. A correctly-reasoned
+answer now matches one of several valid phrasings.
 
-**It does not fix false positives.** A wrong answer that reuses reference
-vocabulary densely still scores deceptively high — adding more correct
-reference phrasings only ever raises scores, it never catches wrong ones.
+Multiple reference answers do not reduce false positives. A wrong answer
+with matching vocabulary still scores high. Adding reference phrasings
+only raises scores. It cannot lower an incorrect score.
 
-**Recommendation:** keep the live meter as an engagement/feedback tool, not
-the actual grading mechanism. Score real extra credit via a separate
-LLM-rubric or TA review at submission (same draft-assist pattern as HW2),
-not the live number. This is also a legitimately good teaching moment for
-an AI-literacy-themed course — consider surfacing this exact
-gameability to students as part of the exercise.
+**Recommendation:** Use the live meter for engagement and feedback only.
+Do not use the live score for grading. Score extra credit through a
+separate LLM-rubric or manual review at submission time.
 
 ## Not yet built
 
-- Scoring → extra credit points mapping (design call made: score off final
-  similarity/answer at submission, not live number — see limitations above).
-- Real per-student session/identity tracking — currently in-memory,
-  resets on server restart. Needed before running with real students.
-- Cloud deployment — runs locally only so far. Small VM (2-4 vCPU) should
-  be enough based on load testing; re-test on the actual host before relying
-  on it for the exam.
-- "JEV" — a second idea from Professor Charlie's feedback, not yet scoped.
+- Scoring logic for extra credit points. Decision: score the final
+  submitted answer, not the live number.
+- Per-student session tracking. Current sessions are in-memory. Sessions
+  reset on server restart.
+- Cloud deployment. Current tests used a local machine. Retest on the
+  target host before the exam.
+- A second proposed feature ("JEV"). Not yet scoped.
