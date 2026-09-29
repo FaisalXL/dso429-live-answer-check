@@ -87,6 +87,47 @@ REFERENCE_ANSWERS = {
         "by an external data feed about whether the order was fulfilled, so "
         "it's only as trustworthy as that outside data source."
     ),
+    "structured_bullets": (
+        "Three things happen: the customer's payment goes into escrow at "
+        "order time. The contract checks a deadline against store "
+        "confirmation. If confirmed in time, funds go to the store; if not, "
+        "funds return to the customer automatically. The weak point is the "
+        "contract needs external proof that the order was actually "
+        "completed, and that proof source could be inaccurate or "
+        "compromised."
+    ),
+    "terse_minimal": (
+        "Hold the payment in a smart contract until the deadline. Auto-pay "
+        "the store if they confirm, auto-refund the customer if they don't, "
+        "no human needed either way. Biggest weakness: it trusts whatever "
+        "outside source tells it the order was fulfilled."
+    ),
+    "rental_deposit_analogy": (
+        "It's similar to how a rental security deposit could be handled "
+        "automatically: the money sits untouched, and code releases it one "
+        "way or the other once a fixed date passes and some outside signal "
+        "says whether the tenant met the conditions. The whole system only "
+        "works if that outside signal is accurate, since the contract "
+        "itself has no way to check reality directly."
+    ),
+    "risk_first_structure": (
+        "The biggest weakness of this approach is that a smart contract "
+        "can't independently verify a real-world delivery, so it must trust "
+        "some outside oracle to report whether the order happened, and a "
+        "compromised or incorrect oracle breaks the whole system. That "
+        "said, the core mechanism is simple: deposit funds are held in "
+        "code-enforced escrow and released automatically to whichever party "
+        "the deadline-and-confirmation logic favors, without needing either "
+        "side to manually process a refund."
+    ),
+    "nonnative_style": (
+        "The money from customer is keep in the smart contract like a lock "
+        "box when order is place. If store say yes before time is up, money "
+        "go to store. If not confirm, money go back to customer by itself, "
+        "nobody need to do nothing. Problem is contract only know what "
+        "oracle tell it about real world, so if oracle wrong the contract "
+        "also wrong even code work fine."
+    ),
 }
 
 print("Loading embedding model...")
