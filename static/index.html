@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DSO429 — Live Answer Check (Demo)</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121822;
+    --panel-border: #1f2937;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #58a6ff;
+    --red: #ff4d5e;
+    --yellow: #ffcb47;
+    --green: #3ddc84;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at top, #131a24, var(--bg) 60%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+  }
+  .wrap { width: 100%; max-width: 760px; }
+  h1 {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 4px;
+  }
+  .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 18px;
+  }
+  .question { font-size: 16px; line-height: 1.55; }
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+    background: #0d1420;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 14px;
+    font-family: inherit;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .meter-row { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+  .meter-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); width: 130px; }
+  .score-num { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; width: 64px; text-align: right; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .pixel-grid {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 4px;
+    margin: 14px 0 6px;
+  }
+  .pixel {
+    aspect-ratio: 1 / 1;
+    border-radius: 3px;
+    background: #1a2230;
+    transition: background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+  }
+  .pixel.lit { transform: scale(1.04); }
+
+  .threshold-line {
+    position: relative;
+    height: 14px;
+    margin-bottom: 4px;
+  }
+  .threshold-marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: var(--muted);
+    opacity: 0.6;
+  }
+  .threshold-marker::after {
+    content: "hint unlocks";
+    position: absolute;
+    top: -16px;
+    left: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .trend { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .trend.up { color: var(--green); }
+  .trend.down { color: var(--red); }
+
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 30px; margin-top: 10px; }
+  .spark-bar { width: 4px; background: var(--accent); border-radius: 1px; opacity: 0.55; transition: height 200ms ease; }
+
+  .hint-area { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  button#hintBtn {
+    background: var(--accent);
+    color: #06121f;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 150ms ease, transform 150ms ease;
+  }
+  button#hintBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+  button#hintBtn:not(:disabled):hover { transform: translateY(-1px); }
+  .hint-count { font-size: 12px; color: var(--muted); }
+  .hint-text {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #10202a;
+    border: 1px solid #1e3a4a;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #bfe6ff;
+    display: none;
+  }
+  .hint-text.show { display: block; }
+
+  .footer-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+
+  .reveal-box {
+    margin-top: 22px;
+    border: 1px dashed #5a3a1a;
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .reveal-box summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: #e2a94f;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .reveal-box .reveal-warning {
+    font-size: 11px;
+    color: #8b98a5;
+    margin-top: 4px;
+  }
+  .reveal-box .reveal-text {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #f0d9b5;
+  }
+
+  #confetti {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 50;
+  }
+  .confetti-piece {
+    position: absolute; top: -10px; width: 6px; height: 10px; border-radius: 1px;
+    animation: fall 1400ms linear forwards;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="confetti"></div>
+<div class="wrap">
+  <h1>DSO429 · Live Answer Check</h1>
+  <div class="subtitle">Demo build — placeholder question, not the real midterm content.</div>
+
+  <div class="card">
+    <div class="question" id="questionText">Loading question…</div>
+  </div>
+
+  <div class="card">
+    <textarea id="answerBox" placeholder="Start typing your answer…"></textarea>
+  </div>
+
+  <div class="card">
+    <div class="meter-row">
+      <div class="meter-label">Similarity</div>
+      <div class="live-dot" id="liveDot"></div>
+      <div class="score-num" id="scoreNum">0%</div>
+    </div>
+    <div class="threshold-line"><div class="threshold-marker" id="thresholdMarker"></div></div>
+    <div class="pixel-grid" id="pixelGrid"></div>
+    <div class="trend" id="trend">&nbsp;</div>
+    <div class="spark" id="spark"></div>
+    <div class="trend" id="matchedRef" style="display: none;"></div>
+  </div>
+
+  <div class="card">
+    <div class="hint-area">
+      <button id="hintBtn" disabled>Get a hint</button>
+      <div class="hint-count" id="hintCount">— hints left</div>
+    </div>
+    <div class="hint-text" id="hintText"></div>
+  </div>
+
+  <div class="footer-note">Similarity is computed locally against a hidden reference answer. Hints call an LLM and are limited.</div>
+
+  <details class="reveal-box" id="revealBox" style="display: none;">
+    <summary>Reveal reference answer (demo only)</summary>
+    <div class="reveal-warning">Visible only because DEMO_MODE=true on the server. Turn this off before running with real students.</div>
+    <div class="reveal-text" id="revealText">Loading…</div>
+  </details>
+</div>
+
+<script>
+const PIXEL_COUNT = 24;
+const grid = document.getElementById('pixelGrid');
+const pixels = [];
+for (let i = 0; i < PIXEL_COUNT; i++) {
+  const d = document.createElement('div');
+  d.className = 'pixel';
+  grid.appendChild(d);
+  pixels.push(d);
+}
+
+const SPARK_LEN = 30;
+const sparkEl = document.getElementById('spark');
+const sparkBars = [];
+for (let i = 0; i < SPARK_LEN; i++) {
+  const b = document.createElement('div');
+  b.className = 'spark-bar';
+  b.style.height = '2px';
+  sparkEl.appendChild(b);
+  sparkBars.push(b);
+}
+const sparkHistory = [];
+
+const answerBox = document.getElementById('answerBox');
+const scoreNum = document.getElementById('scoreNum');
+const trendEl = document.getElementById('trend');
+const hintBtn = document.getElementById('hintBtn');
+const hintCount = document.getElementById('hintCount');
+const hintText = document.getElementById('hintText');
+const thresholdMarker = document.getElementById('thresholdMarker');
+
+let threshold = 0.55;
+let maxHints = 3;
+let hintsUsed = 0;
+let sessionId = 'anon';
+let lastScore = 0;
+let belowThreshold = true;
+let confettiFired = false;
+let debounceTimer = null;
+let ws = null;
+let demoMode = false;
+const matchedRefEl = document.getElementById('matchedRef');
+
+function colorForScore(s) {
+  // red -> yellow -> green
+  if (s < 0.5) {
+    const t = s / 0.5;
+    return lerpColor([255, 77, 94], [255, 203, 71], t);
+  } else {
+    const t = (s - 0.5) / 0.5;
+    return lerpColor([255, 203, 71], [61, 220, 132], t);
+  }
+}
+function lerpColor(a, b, t) {
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+
+let displayedScore = 0;
+let scoreAnimFrame = null;
+
+function animateScoreTo(target) {
+  cancelAnimationFrame(scoreAnimFrame);
+  const start = displayedScore;
+  const startTime = performance.now();
+  const duration = 150;
+  function step(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    displayedScore = start + (target - start) * t;
+    scoreNum.textContent = Math.round(displayedScore * 100) + '%';
+    scoreNum.style.color = colorForScore(displayedScore);
+    if (t < 1) scoreAnimFrame = requestAnimationFrame(step);
+  }
+  scoreAnimFrame = requestAnimationFrame(step);
+}
+
+function renderScore(score) {
+  animateScoreTo(score);
+
+  const lit = Math.round(score * PIXEL_COUNT);
+  pixels.forEach((p, i) => {
+    if (i < lit) {
+      const s = (i + 1) / PIXEL_COUNT;
+      const c = colorForScore(Math.min(score, s));
+      p.style.background = colorForScore(score);
+      p.style.boxShadow = `0 0 8px ${colorForScore(score)}`;
+      p.classList.add('lit');
+    } else {
+      p.style.background = '';
+      p.style.boxShadow = '';
+      p.classList.remove('lit');
+    }
+  });
+
+  if (score > lastScore + 0.005) {
+    trendEl.textContent = '▲ rising';
+    trendEl.className = 'trend up';
+  } else if (score < lastScore - 0.005) {
+    trendEl.textContent = '▼ falling';
+    trendEl.className = 'trend down';
+  } else {
+    trendEl.textContent = '';
+  }
+
+  sparkHistory.push(score);
+  if (sparkHistory.length > SPARK_LEN) sparkHistory.shift();
+  sparkBars.forEach((b, i) => {
+    const idx = i - (SPARK_LEN - sparkHistory.length);
+    if (idx < 0) { b.style.height = '2px'; b.style.background = '#243244'; return; }
+    const v = sparkHistory[idx];
+    b.style.height = Math.max(2, v * 28) + 'px';
+    b.style.background = colorForScore(v);
+    b.style.opacity = 0.9;
+  });
+
+  belowThreshold = score < threshold;
+  hintBtn.disabled = belowThreshold ? (hintsUsed >= maxHints) : true;
+  if (!belowThreshold) {
+    // Still allow re-checking a hint if they were below threshold recently? Keep simple: only enabled while below.
+  }
+
+  if (score >= 0.9 && !confettiFired) {
+    confettiFired = true;
+    fireConfetti();
+  }
+  if (score < 0.85) confettiFired = false;
+
+  lastScore = score;
+}
+
+function fireConfetti() {
+  const host = document.getElementById('confetti');
+  const colors = ['#3ddc84', '#58a6ff', '#ffcb47', '#ff4d5e'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDelay = (Math.random() * 300) + 'ms';
+    piece.style.animationDuration = (900 + Math.random() * 700) + 'ms';
+    host.appendChild(piece);
+    setTimeout(() => piece.remove(), 2200);
+  }
+}
+
+function connectWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/similarity`);
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.type === 'similarity') {
+      renderScore(data.score);
+      if (demoMode && data.matched_reference) {
+        matchedRefEl.style.display = 'block';
+        matchedRefEl.textContent = `matched reference: ${data.matched_reference}`;
+        matchedRefEl.className = 'trend';
+      }
+    }
+  };
+  ws.onclose = () => setTimeout(connectWs, 1000);
+}
+
+function sendUpdate() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ text: answerBox.value }));
+  }
+}
+
+const THROTTLE_MS = 180;
+let lastSentAt = 0;
+
+function scheduleSend() {
+  const now = Date.now();
+  const elapsed = now - lastSentAt;
+  clearTimeout(debounceTimer);
+  if (elapsed >= THROTTLE_MS) {
+    lastSentAt = now;
+    sendUpdate();
+  } else {
+    debounceTimer = setTimeout(() => {
+      lastSentAt = Date.now();
+      sendUpdate();
+    }, THROTTLE_MS - elapsed);
+  }
+}
+
+answerBox.addEventListener('input', scheduleSend);
+
+hintBtn.addEventListener('click', async () => {
+  hintBtn.disabled = true;
+  hintBtn.textContent = 'Thinking…';
+  try {
+    const res = await fetch('/api/hint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, text: answerBox.value }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      hintText.textContent = 'Hint unavailable: ' + data.error;
+      hintText.classList.add('show');
+    } else {
+      hintsUsed = data.hints_used;
+      hintText.textContent = data.hint;
+      hintText.classList.add('show');
+      updateHintCount();
+    }
+  } catch (e) {
+    hintText.textContent = 'Hint request failed.';
+    hintText.classList.add('show');
+  }
+  hintBtn.textContent = 'Get a hint';
+  hintBtn.disabled = !(belowThreshold && hintsUsed < maxHints);
+});
+
+function updateHintCount() {
+  const left = Math.max(0, maxHints - hintsUsed);
+  hintCount.textContent = `${left} hint${left === 1 ? '' : 's'} left`;
+}
+
+async function init() {
+  const res = await fetch('/api/question');
+  const data = await res.json();
+  document.getElementById('questionText').textContent = data.question;
+  demoMode = !!data.demo_mode;
+  threshold = data.threshold;
+  maxHints = data.max_hints;
+  sessionId = data.session_id;
+  thresholdMarker.style.left = (threshold * 100) + '%';
+  updateHintCount();
+  connectWs();
+
+  if (data.demo_mode) {
+    const revealBox = document.getElementById('revealBox');
+    const revealText = document.getElementById('revealText');
+    revealBox.style.display = 'block';
+    revealBox.addEventListener('toggle', async () => {
+      if (revealBox.open && revealText.textContent === 'Loading…') {
+        const r = await fetch('/api/reveal-answer');
+        const d = await r.json();
+        if (d.reference_answers) {
+          revealText.innerHTML = Object.entries(d.reference_answers)
+            .map(([label, text]) => `<p><strong>${label}:</strong> ${text}</p>`)
+            .join('');
+        } else {
+          revealText.textContent = 'Unavailable.';
+        }
+      }
+    }, { once: false });
+  }
+}
+init();
+</script>
+</body>
+</html>
