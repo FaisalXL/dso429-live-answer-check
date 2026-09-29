@@ -143,6 +143,37 @@
 
   .footer-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
 
+  .jev-card {
+    border: 1px solid #3a2a5c;
+    background: #140f20;
+  }
+  .jev-label {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #b39ddb;
+  }
+  .jev-score {
+    font-variant-numeric: tabular-nums;
+    font-size: 22px;
+    font-weight: 600;
+    color: #b39ddb;
+  }
+  .jev-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .jev-bar-track {
+    height: 8px;
+    border-radius: 4px;
+    background: #1f1730;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .jev-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #7c5cbf, #b39ddb);
+    width: 0%;
+    transition: width 220ms ease;
+  }
+
   .reveal-box {
     margin-top: 22px;
     border: 1px dashed #5a3a1a;
@@ -207,6 +238,15 @@
     <div class="trend" id="matchedRef" style="display: none;"></div>
   </div>
 
+  <div class="card jev-card">
+    <div class="meter-row">
+      <div class="jev-label">Jev correctness (experimental)</div>
+      <div class="jev-score" id="jevScore">—</div>
+    </div>
+    <div class="jev-bar-track"><div class="jev-bar-fill" id="jevBarFill"></div></div>
+    <div class="jev-meta" id="jevMeta">Side-by-side test against the cosine-similarity meter above. Not used for hints or scoring.</div>
+  </div>
+
   <div class="card">
     <div class="hint-area">
       <button id="hintBtn" disabled>Get a hint</button>
@@ -266,6 +306,63 @@ let debounceTimer = null;
 let ws = null;
 let demoMode = false;
 const matchedRefEl = document.getElementById('matchedRef');
+
+// --- Jev experimental panel: separate connection, separate throttle,
+// sequence-numbered so a slow response can never overwrite a newer one.
+let jevWs = null;
+let jevSeq = 0;
+let jevLastDisplayedSeq = -1;
+let jevDebounceTimer = null;
+let jevLastSentAt = 0;
+const JEV_THROTTLE_MS = 500; // slower than the 180ms cosine-sim throttle --
+// Jev's own per-request latency (measured: 92ms-1.7s tail) can exceed a
+// faster interval, so this cadence keeps in-flight requests manageable.
+const jevScoreEl = document.getElementById('jevScore');
+const jevBarFillEl = document.getElementById('jevBarFill');
+const jevMetaEl = document.getElementById('jevMeta');
+
+function connectJevWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  jevWs = new WebSocket(`${proto}://${location.host}/ws/jev`);
+  jevWs.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.type !== 'jev') return;
+    if (data.seq < jevLastDisplayedSeq) return; // stale response, discard
+    jevLastDisplayedSeq = data.seq;
+    if (data.error) {
+      jevMetaEl.textContent = `Error: ${data.error}`;
+      return;
+    }
+    const pct = Math.round(data.score * 100);
+    jevScoreEl.textContent = pct + '%';
+    jevBarFillEl.style.width = pct + '%';
+    jevMetaEl.textContent = `latency: ${data.latency_ms}ms · seq ${data.seq}`;
+  };
+  jevWs.onclose = () => setTimeout(connectJevWs, 1000);
+}
+
+function jevSendUpdate() {
+  if (jevWs && jevWs.readyState === WebSocket.OPEN) {
+    jevSeq++;
+    jevWs.send(JSON.stringify({ text: answerBox.value, seq: jevSeq }));
+    jevMetaEl.textContent = `checking… (seq ${jevSeq})`;
+  }
+}
+
+function jevScheduleSend() {
+  const now = Date.now();
+  const elapsed = now - jevLastSentAt;
+  clearTimeout(jevDebounceTimer);
+  if (elapsed >= JEV_THROTTLE_MS) {
+    jevLastSentAt = now;
+    jevSendUpdate();
+  } else {
+    jevDebounceTimer = setTimeout(() => {
+      jevLastSentAt = Date.now();
+      jevSendUpdate();
+    }, JEV_THROTTLE_MS - elapsed);
+  }
+}
 
 function colorForScore(s) {
   // red -> yellow -> green
@@ -411,6 +508,7 @@ function scheduleSend() {
 }
 
 answerBox.addEventListener('input', scheduleSend);
+answerBox.addEventListener('input', jevScheduleSend);
 
 hintBtn.addEventListener('click', async () => {
   hintBtn.disabled = true;
@@ -455,6 +553,7 @@ async function init() {
   thresholdMarker.style.left = (threshold * 100) + '%';
   updateHintCount();
   connectWs();
+  connectJevWs();
 
   if (data.demo_mode) {
     const revealBox = document.getElementById('revealBox');

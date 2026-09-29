@@ -35,3 +35,22 @@ application. Run them against a local server. `efficacy_test.py` and
   correctness check instead of a similarity metric. Result: correct on
   all tested cases, including every case the other approaches missed.
   Recommended approach for scoring, not live display.
+- `jev_decisions_test.py`: Tests TypeSafe's Jev decisions API
+  (`typesafe/jev-1.13`) as a correctness check, on the 5 hardest cases.
+  Result: correct on all 5, with informative probabilities, not just a
+  binary verdict.
+- `jev_full_regression_test.py`: Runs the full 16-case bank (same cases
+  as `regression_test.py`) through Jev. Result: correct on all 16. This
+  includes the partial-answer case that every other tested approach got
+  wrong.
+- `jev_progressive_typing_test.py`: Sends a growing answer word-by-word,
+  simulating live typing. Checks whether the score ramps smoothly or
+  jumps. Result: ramps smoothly for a correct answer, stays flat and low
+  for a wrong-logic answer throughout.
+- `jev_sustained_load_test.py` / `jev_sustained_load_test_180ms.py`: 40
+  simulated students, continuous requests for 8 seconds, at a 500ms and
+  a 180ms interval. Result: zero errors at both, consistent latency
+  distribution. Per-request latency (measured: 92ms-1.7s tail) can exceed
+  the send interval. Responses can then arrive out of order. This is why
+  the live integration in `backend/main.py` sequence-numbers requests and
+  discards stale responses.

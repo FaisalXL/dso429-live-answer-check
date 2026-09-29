@@ -200,6 +200,91 @@ async def ws_similarity(websocket: WebSocket):
         pass
 
 
+# Experimental side-by-side comparison: a correctness score from TypeSafe's
+# Jev decisions model, alongside the local cosine-similarity meter above.
+# Tested in scratchpad/jev_*.py -- 16/16 on the full case bank, including
+# the partial-credit case cosine similarity got wrong. Real per-request
+# latency (measured: 92ms-1.7s tail) can exceed the send interval, so
+# responses can arrive out of order; the frontend discards any response
+# older than the one already displayed (sequence-numbered).
+JEV_QUESTIONS = {
+    "correct": {
+        "type": "noul",
+        "instructions": (
+            "Does the student's answer demonstrate correct understanding of "
+            "the reference answer's core claims (the escrow/deadline "
+            "mechanism AND the oracle risk), even if phrased completely "
+            "differently? An answer covering only one of the two required "
+            "ideas is incomplete. The student may still be mid-answer; "
+            "judge based on what has been written so far."
+        ),
+        "criteria": {
+            "true": (
+                "Reasoning so far is correct and, if incomplete, is heading "
+                "toward covering both the mechanism and the risk."
+            ),
+            "false": (
+                "Reasoning is wrong or backwards, covers only one of the two "
+                "required ideas, or is just keywords with no explanation."
+            ),
+        },
+    }
+}
+
+
+async def compute_jev_correctness(text: str) -> tuple[float, float]:
+    """Returns (probability_correct, latency_ms)."""
+    if not text.strip() or not OPENROUTER_API_KEY:
+        return 0.0, 0.0
+    payload = {
+        "model": "typesafe/jev-1.13",
+        "state": {
+            "reference_answer": REFERENCE_ANSWERS["technical"],
+            "student_answer": text,
+        },
+        "questions": JEV_QUESTIONS,
+    }
+    t0 = asyncio.get_event_loop().time()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            "https://openrouter.ai/api/alpha/decisions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+    latency_ms = (asyncio.get_event_loop().time() - t0) * 1000
+    resp.raise_for_status()
+    prob = resp.json()["answers"]["correct"]["noul"]
+    return prob, latency_ms
+
+
+@app.websocket("/ws/jev")
+async def ws_jev(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            data = json.loads(raw)
+            text = data.get("text", "")
+            seq = data.get("seq", 0)
+            try:
+                prob, latency_ms = await compute_jev_correctness(text)
+                await websocket.send_json(
+                    {
+                        "type": "jev",
+                        "seq": seq,
+                        "score": prob,
+                        "latency_ms": round(latency_ms),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                await websocket.send_json({"type": "jev", "seq": seq, "error": str(exc)})
+    except WebSocketDisconnect:
+        pass
+
+
 @app.post("/api/hint")
 async def get_hint(payload: dict):
     session_id = payload.get("session_id", "anon")

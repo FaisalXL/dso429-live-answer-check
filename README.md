@@ -95,12 +95,40 @@ only raises scores. It cannot lower an incorrect score.
 Do not use the live score for grading. Score extra credit through a
 separate LLM-rubric or manual review at submission time.
 
+## Jev correctness check (experimental)
+
+TypeSafe's Jev (`typesafe/jev-1.13`, via OpenRouter's decisions API) is a
+structured decision model. It returns a calibrated probability instead of
+free-form text. The interface shows it side by side with the cosine
+similarity meter, for comparison. It does not affect hints or scoring.
+
+Test results: correct on all 16 cases in the test bank. Three other
+approaches were also tested: cosine similarity, a bigger embedding model,
+and an NLI entailment model. Each of the three missed at least one case
+that Jev got right. See `scratchpad/README.md` for the individual test
+scripts and results.
+
+**Cost:** About $0.0000234 per call, measured directly from the API's own
+response. For 40 students over a 10-minute question window, at the
+current 500ms update interval, this costs $0.23-$0.76 for the class. The
+range depends on how much of that time students spend actively typing. A
+submission-time-only check (one call per student) costs about $0.001 for
+the same class.
+
+**Latency:** 92ms-1.7s per call, measured under 40-student concurrent
+load. Requests can complete out of order because of this. The frontend
+sequence-numbers each request and discards any response older than the
+one already displayed.
+
+**Status:** Working, side-by-side only. Not yet used for hints, the live
+threshold, or grading.
+
 ## Not yet built
 
 - Scoring logic for extra credit points. Decision: score the final
-  submitted answer, not the live number.
+  submitted answer, not the live number. The Jev correctness check above
+  is the leading candidate for this.
 - Per-student session tracking. Current sessions are in-memory. Sessions
   reset on server restart.
 - Cloud deployment. Current tests used a local machine. Retest on the
   target host before the exam.
-- A second proposed feature ("JEV"). Not yet scoped.
