@@ -35,6 +35,15 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 # Placeholder DSO429-flavored question. Swap in the real midterm question +
 # reference answer before the actual exam.
+#
+# WHEN YOU CHANGE THIS QUESTION: JEV_QUESTIONS below (the "instructions"
+# and "criteria" text) is written for THIS question's specific content --
+# it names the two required concepts directly. Tested in
+# scratchpad/jev_generic_instructions_test.py: a version that doesn't name
+# the specific concepts drops a correct answer's score from 90% to 45%.
+# So swapping REFERENCE_ANSWERS alone is not enough -- JEV_QUESTIONS must
+# be rewritten by hand for the new question too, or Jev's correctness
+# check will silently keep judging against the OLD question's content.
 QUESTION_TEXT = (
     "A local coffee retailer wants to let customers pre-order seasonal "
     "drinks and pay a deposit that is automatically refunded if the store "

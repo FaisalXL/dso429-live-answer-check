@@ -54,3 +54,10 @@ application. Run them against a local server. `efficacy_test.py` and
   the send interval. Responses can then arrive out of order. This is why
   the live integration in `backend/main.py` sequence-numbers requests and
   discards stale responses.
+- `jev_generic_instructions_test.py`: Tests whether the Jev question
+  instructions in `backend/main.py` still work if written generically,
+  without naming the specific required concepts. Result: a genuinely
+  correct answer dropped from 90% to 45% confidence. The partial-answer
+  catch still worked either way. Conclusion: the current instructions are
+  tied to this specific question. They need to be rewritten by hand when
+  the question changes, not just the reference answer text.
