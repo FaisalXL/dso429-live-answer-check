@@ -24,6 +24,19 @@ Open http://localhost:8001 in a browser.
 The first run downloads the embedding model (about 80MB). The system
 caches the model after the first download.
 
+## Deployment
+
+`render.yaml` defines a free-tier web service on Render. Create a new
+Blueprint from this repo on Render and it reads this file automatically.
+Enter `OPENROUTER_API_KEY` in the Render dashboard when prompted; it is
+not stored in the repo.
+
+Measured memory use: about 348MB resident. This uses a CPU-only PyTorch
+build; the build command installs this specifically, not the default
+GPU-capable build. Render's free tier caps at 512MB. This leaves
+headroom for one or a few concurrent users, not 40. Retest before
+relying on this tier for the real exam.
+
 ## Configuration
 
 Copy `.env.example` to `.env`. Set these values:
