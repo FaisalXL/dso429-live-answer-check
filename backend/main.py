@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -149,7 +150,24 @@ reference_embeddings = model.encode(
 )
 print(f"Model ready. {len(reference_labels)} reference answers loaded.")
 
-app = FastAPI()
+# A new httpx.AsyncClient() per request (the old approach here) allocates
+# its own connection pool and TLS context every time and tears it down
+# right after -- on a memory-constrained instance, with Jev firing every
+# 500ms while a student types, that churn was a real contributor to an
+# out-of-memory crash observed on Render's free tier. One shared client
+# for the app's lifetime avoids it.
+http_client: httpx.AsyncClient | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global http_client
+    http_client = httpx.AsyncClient()
+    yield
+    await http_client.aclose()
+
+
+app = FastAPI(lifespan=lifespan)
 
 hint_counts: dict[str, int] = {}
 
@@ -254,15 +272,15 @@ async def compute_jev_correctness(text: str) -> tuple[float, float]:
         "questions": JEV_QUESTIONS,
     }
     t0 = asyncio.get_event_loop().time()
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(
-            "https://openrouter.ai/api/alpha/decisions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
+    resp = await http_client.post(
+        "https://openrouter.ai/api/alpha/decisions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=10.0,
+    )
     latency_ms = (asyncio.get_event_loop().time() - t0) * 1000
     resp.raise_for_status()
     prob = resp.json()["answers"]["correct"]["noul"]
@@ -325,29 +343,29 @@ async def get_hint(payload: dict):
         "Give one short hint."
     )
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        try:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": OPENROUTER_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "max_tokens": 120,
-                    "temperature": 0.7,
-                },
-            )
-            resp.raise_for_status()
-            body = resp.json()
-            hint_text = body["choices"][0]["message"]["content"].strip()
-        except Exception as exc:  # noqa: BLE001
-            return {"error": "llm_failed", "detail": str(exc)}
+    try:
+        resp = await http_client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "max_tokens": 120,
+                "temperature": 0.7,
+            },
+            timeout=20.0,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        hint_text = body["choices"][0]["message"]["content"].strip()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": "llm_failed", "detail": str(exc)}
 
     hint_counts[session_id] = used + 1
     return {"hint": hint_text, "hints_used": used + 1, "max_hints": MAX_HINTS}
