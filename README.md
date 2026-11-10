@@ -1,147 +1,111 @@
-# Live Answer Check
+# Live Answer Lab
 
-Students type an answer. A local embedding model computes cosine
-similarity against multiple reference answers. The system displays the
-highest score as a live meter. Below a threshold, students can request an
-LLM hint. The system limits hints per student.
+An assignment with two question types. Jev, a decision model from
+TypeSafe, scores each answer while the student works.
 
-**Status:** Working demo. The question and reference answers are
-placeholders. Replace `QUESTION_TEXT` and `REFERENCE_ANSWERS` in
-`backend/main.py` with real midterm content before the exam.
+- **Live questions.** The student types an answer. Jev scores its
+  correctness while the student types. Below a threshold, the student
+  can request a hint.
+- **Fix-the-AI questions.** An AI gives an answer with planted mistakes.
+  The student says what is wrong. The AI fixes only what the student
+  points out. Jev scores each new version and checks each planted
+  mistake.
+
+After each question, a feedback box earns 1 credit for any non-empty
+answer. At the end, a checkbox asks if Claude Code may help grade the
+assignment. If the student leaves it unchecked, a person grades it by hand.
+
+**Status:** Working demo. The questions are placeholders about Pedalwise,
+a fictional bike-share company. Replace them in `backend/questions.json`.
 
 ## Setup
 
-Run these commands:
-
 ```bash
 cd extra-credit-pixel-display
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 uvicorn backend.main:app --reload --port 8001
 ```
 
 Open http://localhost:8001 in a browser.
 
-The first run downloads the embedding model (about 80MB). The system
-caches the model after the first download.
-
-## Deployment
-
-`render.yaml` defines a free-tier web service on Render. Create a new
-Blueprint from this repo on Render and it reads this file automatically.
-Enter `OPENROUTER_API_KEY` in the Render dashboard when prompted; it is
-not stored in the repo.
-
-Measured memory use: about 348MB resident. This uses a CPU-only PyTorch
-build; the build command installs this specifically, not the default
-GPU-capable build. Render's free tier caps at 512MB. This leaves
-headroom for one or a few concurrent users, not 40. Retest before
-relying on this tier for the real exam.
-
 ## Configuration
 
 Copy `.env.example` to `.env`. Set these values:
 
-- `OPENROUTER_API_KEY`: Required for hints. The similarity meter works
-  without this key.
-- `OPENROUTER_MODEL`: Defaults to `openai/gpt-4o-mini`.
-- `SIMILARITY_THRESHOLD`: A value from 0 to 1. Default: 0.55. This value
-  sets when the hint button unlocks.
-- `MAX_HINTS`: Maximum hints per student session. Default: 3.
-- `DEMO_MODE`: Set to `true` to expose `/api/reveal-answer` and show the
-  matched reference in the interface. Set to `false` for real students.
-  This setting exposes the answer key when true.
+- `OPENROUTER_API_KEY`: Required. Jev, hints, and AI revisions all use it.
+- `OPENROUTER_MODEL`: The model for hints and AI revisions. Default:
+  `openai/gpt-4o-mini`.
+- `HINT_THRESHOLD`: The hint button unlocks below this Jev score.
+  Default: 0.5.
+- `PASS_THRESHOLD`: A fix-the-AI question is solved when every mistake
+  is fixed and the Jev score reaches this value. Default: 0.8.
+- `MAX_HINTS`: Hints per student per question. Default: 3.
+- `DEMO_MODE`: `true` shows a question navigator and an answer-key box.
+  Set it to `false` for real students. It exposes the answer key.
+- `DEV_COSINE`: `true` shows a cosine-similarity readout for comparison.
+  Install `requirements-dev.txt` first. Default: `false`.
 
-## System design
+## Writing questions
 
-**Similarity engine:** The system uses `sentence-transformers` with the
-`all-MiniLM-L6-v2` model. The model runs locally. The system makes no
-external calls for similarity scoring. The system embeds all reference
-answers at startup. The system embeds each student update and compares it
-against all references. The system reports the maximum similarity score.
+Each entry in `backend/questions.json` has these fields:
 
-**Multiple reference answers:** `REFERENCE_ANSWERS` in `backend/main.py`
-stores several correct phrasings of the same answer. See "Known
-limitations" for the reason.
+- `type`: `live` or `correction`.
+- `prompt`: The question the student sees.
+- `reference_answer`: The correct answer. Jev uses it. Students never
+  see it unless `DEMO_MODE` is on.
+- `jev`: The `instructions` and `criteria` that Jev uses to judge
+  correctness.
+- For `correction` questions only: `seed_answer` (the flawed AI answer),
+  `mistakes` (one `error` description per planted mistake), and
+  `max_rounds`.
 
-**Live typing behavior:** The frontend sends a WebSocket update every
-180ms during active typing. A standard debounce only updates after the
-user stops typing; this system updates continuously instead. The frontend
-animates the displayed score for smooth transitions.
+**Write the `jev` instructions for each question by hand.** Name the
+ideas that a correct answer must contain. A generic version was tested
+and failed. It cut the score of a correct answer from 90% to 45%. See
+`scratchpad/jev_generic_instructions_test.py`.
 
-**Concurrency:** The system runs each embedding call in a background
-thread using `asyncio.to_thread`. The system limits PyTorch to one thread
-per call using `torch.set_num_threads(1)`. This setting allows the thread
-pool to parallelize calls across CPU cores.
+## How it works
 
-Test conditions: 40 simultaneous connections, 8 seconds of continuous
-typing, on an 8-core machine.
-- Median latency: 89ms.
-- 95th-percentile latency: 237ms.
-- Throughput scales with CPU core count. Retest on the deployment host
-  before the exam.
+**Live scoring.** The browser sends the answer over a WebSocket at most
+every 500ms. The server keeps only the newest text per question. It runs
+one Jev call at a time. Fast typing therefore never builds a backlog.
 
-**Hints:** Hints require a button click. The system caps hints per
-session. The hint prompt includes all reference phrasings.
+**Fix-the-AI rounds.** The AI's instructions say to change only what the
+student's feedback addresses. Vague feedback such as "fix it" changes
+nothing. Without this rule, the AI fixes every mistake at once, and the
+question tests nothing. One Jev call scores the new answer and checks
+each planted mistake.
+
+**Submission.** The server scores every final answer again on submit.
+The stored scores therefore do not depend on the browser. The server
+writes each record to `submissions/<student-id>_<time>.json`. The
+student can also download a copy.
+
+## Deployment
+
+`render.yaml` defines a free-tier web service on Render. Create a
+Blueprint from this repo. Enter `OPENROUTER_API_KEY` in the Render
+dashboard; the repo does not store it.
+
+The deployed build does not include PyTorch, so it needs little memory.
 
 ## Known limitations
 
-Cosine similarity measures topic proximity. It does not measure
-correctness. Test results against this model and question:
+- **Storage.** Render's free tier deletes local files on each restart.
+  Submissions saved there are lost. Use a database or the downloaded
+  copies before real use.
+- **Identity.** Students type their own name and ID. The app does not
+  check them.
+- **Round limit.** The browser enforces the round limit. The record
+  shows every round, so a grader can see extra rounds.
+- **Jev instructions.** Each new question needs hand-written Jev
+  instructions. See "Writing questions."
 
-| Case | Similarity |
-|---|---|
-| Reference answer itself | 100% |
-| Wrong logic, dense reference vocabulary | 84% |
-| Keyword list, no reasoning | 70% |
-| Correct answer, independent wording, single reference | 62% |
-| Correct answer, independent wording, multiple references | 80% |
-| On-topic, does not answer the question | 25-28% |
+## Background
 
-Multiple reference answers reduce false negatives. A correctly-reasoned
-answer now matches one of several valid phrasings.
-
-Multiple reference answers do not reduce false positives. A wrong answer
-with matching vocabulary still scores high. Adding reference phrasings
-only raises scores. It cannot lower an incorrect score.
-
-**Recommendation:** Use the live meter for engagement and feedback only.
-Do not use the live score for grading. Score extra credit through a
-separate LLM-rubric or manual review at submission time.
-
-## Jev correctness check (experimental)
-
-TypeSafe's Jev (`typesafe/jev-1.13`, via OpenRouter's decisions API) is a
-structured decision model. It returns a calibrated probability instead of
-free-form text. The interface shows it side by side with the cosine
-similarity meter, for comparison. It does not affect hints or scoring.
-
-Test results: correct on all 16 cases in the test bank. Three other
-approaches were also tested: cosine similarity, a bigger embedding model,
-and an NLI entailment model. Each of the three missed at least one case
-that Jev got right. See `scratchpad/README.md` for the individual test
-scripts and results.
-
-**Cost:** About $0.0000234 per call, measured directly from the API's own
-response. For 40 students over a 10-minute question window, at the
-current 500ms update interval, this costs $0.23-$0.76 for the class. The
-range depends on how much of that time students spend actively typing. A
-submission-time-only check (one call per student) costs about $0.001 for
-the same class.
-
-**Latency:** 92ms-1.7s per call, measured under 40-student concurrent
-load. Requests can complete out of order because of this. The frontend
-sequence-numbers each request and discards any response older than the
-one already displayed.
-
-**Status:** Working, side-by-side only. Not yet used for hints, the live
-threshold, or grading.
-
-## Not yet built
-
-- Scoring logic for extra credit points. Decision: score the final
-  submitted answer, not the live number. The Jev correctness check above
-  is the leading candidate for this.
-- Per-student session tracking. Current sessions are in-memory. Sessions
-  reset on server restart.
-- Cloud deployment. Current tests used a local machine. Retest on the
-  target host before the exam.
+This project started as a live cosine-similarity meter. Tests showed
+that cosine similarity measures topic, not correctness. A wrong answer
+with the right words scored 84%. A bigger embedding model and an NLI
+model did not fix this. Jev scored all 16 test cases correctly. The test
+scripts and results are in `scratchpad/README.md`.

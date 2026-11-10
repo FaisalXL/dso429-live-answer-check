@@ -3,576 +3,671 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DSO429 — Live Answer Check (Demo)</title>
+<title>Live Answer Lab</title>
 <style>
   :root {
     --bg: #0b0f14;
     --panel: #121822;
-    --panel-border: #1f2937;
+    --panel-2: #0d1420;
+    --border: #1f2937;
     --text: #e6edf3;
     --muted: #8b98a5;
     --accent: #58a6ff;
+    --accent-ink: #06121f;
     --red: #ff4d5e;
     --yellow: #ffcb47;
     --green: #3ddc84;
+    --violet: #b39ddb;
+    --violet-bg: #161026;
+    --violet-border: #3a2a5c;
+    --amber: #e2a94f;
+    --mark: #2b3a1c;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: radial-gradient(circle at top, #131a24, var(--bg) 60%);
+    background: radial-gradient(circle at top, #131a24, var(--bg) 60%) fixed;
+    background-color: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    padding: 32px 16px 64px;
   }
-  .wrap { width: 100%; max-width: 760px; }
-  h1 {
-    font-size: 15px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 4px;
+  .wrap { width: 100%; max-width: 780px; margin: 0 auto; padding: 0 16px 64px; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(11, 15, 20, 0.92);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 22px;
   }
-  .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .topbar-inner { max-width: 780px; margin: 0 auto; padding: 12px 16px 10px; }
+  .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .conn { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #4a5563; }
+  .conn-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .progress { height: 4px; background: #1a2230; border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0; transition: width 250ms ease; }
+  .demo-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    font-size: 11px; padding: 4px 9px; border-radius: 999px;
+    border: 1px dashed #5a3a1a; color: var(--amber); background: transparent; cursor: pointer;
+  }
+  .chip.active { background: #2a1d0e; }
+
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
   .card {
     background: var(--panel);
-    border: 1px solid var(--panel-border);
+    border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 22px 24px;
-    margin-bottom: 18px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
   }
-  .question { font-size: 16px; line-height: 1.55; }
-  textarea {
+  .qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .badge {
+    font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.live { color: var(--green); border-color: #1d4a33; }
+  .badge.correction { color: var(--violet); border-color: var(--violet-border); }
+  .prompt { font-size: 16px; line-height: 1.55; }
+
+  label.field { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+  input[type=text], textarea {
     width: 100%;
-    min-height: 160px;
-    resize: vertical;
-    background: #0d1420;
-    border: 1px solid var(--panel-border);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
     border-radius: 10px;
     color: var(--text);
     font-size: 15px;
     line-height: 1.5;
-    padding: 14px;
+    padding: 12px 14px;
     font-family: inherit;
   }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea { min-height: 150px; resize: vertical; }
+  textarea.short { min-height: 90px; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .meter-row { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
-  .meter-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); width: 130px; }
-  .score-num { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; width: 64px; text-align: right; }
-  .live-dot {
-    width: 8px; height: 8px; border-radius: 50%; background: var(--green);
-    box-shadow: 0 0 8px var(--green);
-    animation: pulse 1.6s ease-in-out infinite;
+  .btn {
+    background: var(--accent); color: var(--accent-ink);
+    border: none; border-radius: 8px; padding: 10px 16px;
+    font-weight: 600; font-size: 14px; cursor: pointer;
   }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn.violet { background: var(--violet); color: #1a0f2e; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
 
-  .pixel-grid {
-    display: grid;
-    grid-template-columns: repeat(24, 1fr);
-    gap: 4px;
-    margin: 14px 0 6px;
-  }
-  .pixel {
-    aspect-ratio: 1 / 1;
-    border-radius: 3px;
-    background: #1a2230;
-    transition: background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
-  }
-  .pixel.lit { transform: scale(1.04); }
+  .meter-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .meter-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .score-num { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; }
+  .pixel-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; margin: 12px 0 6px; }
+  .pixel { aspect-ratio: 1 / 1; border-radius: 3px; background: #1a2230; transition: background-color 220ms ease, box-shadow 220ms ease; }
+  .meter-status { font-size: 11px; color: var(--muted); min-height: 15px; }
 
-  .threshold-line {
-    position: relative;
-    height: 14px;
-    margin-bottom: 4px;
-  }
-  .threshold-marker {
-    position: absolute;
-    top: 0;
-    width: 2px;
-    height: 100%;
-    background: var(--muted);
-    opacity: 0.6;
-  }
-  .threshold-marker::after {
-    content: "hint unlocks";
-    position: absolute;
-    top: -16px;
-    left: 4px;
-    font-size: 10px;
-    color: var(--muted);
-    white-space: nowrap;
+  .hint-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .hint-list { margin: 12px 0 0; padding: 0; list-style: none; }
+  .hint-list li {
+    margin-top: 8px; padding: 10px 12px; border-radius: 10px;
+    background: #10202a; border: 1px solid #1e3a4a; color: #bfe6ff; font-size: 14px; line-height: 1.5;
   }
 
-  .trend { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  .trend.up { color: var(--green); }
-  .trend.down { color: var(--red); }
+  .ai-card { background: var(--violet-bg); border-color: var(--violet-border); }
+  .ai-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--violet); margin-bottom: 8px; }
+  .ai-text { font-size: 15px; line-height: 1.6; }
+  .ai-text mark { background: var(--mark); color: #d8f5b8; border-radius: 3px; padding: 0 2px; }
+  .mistakes { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #4a5563; }
+  .dot.fixed { background: var(--green); border-color: var(--green); box-shadow: 0 0 6px var(--green); }
+  .banner { padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 14px; }
+  .banner.ok { background: #0f2a1c; border: 1px solid #1d5a3a; color: #b8f5d0; }
+  .banner.warn { background: #2a1d0e; border: 1px solid #5a3a1a; color: #f0d9b5; }
+  .banner.err { background: #2a0f14; border: 1px solid #5a1d26; color: #ffc2c8; }
+  .rounds { margin: 0; padding: 0; list-style: none; }
+  .rounds li { border-top: 1px solid var(--border); padding: 10px 0; font-size: 13px; line-height: 1.5; }
+  .rounds li:first-child { border-top: none; }
+  .round-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
-  .spark { display: flex; align-items: flex-end; gap: 2px; height: 30px; margin-top: 10px; }
-  .spark-bar { width: 4px; background: var(--accent); border-radius: 1px; opacity: 0.55; transition: height 200ms ease; }
+  .feedback-card { border-style: dashed; }
+  .review-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
+  .review-row:first-child { border-top: none; }
+  .ok-text { color: var(--green); }
+  .warn-text { color: var(--amber); }
+  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; }
+  .consent input { margin-top: 4px; width: 18px; height: 18px; }
 
-  .hint-area { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  button#hintBtn {
-    background: var(--accent);
-    color: #06121f;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: opacity 150ms ease, transform 150ms ease;
-  }
-  button#hintBtn:disabled { opacity: 0.35; cursor: not-allowed; }
-  button#hintBtn:not(:disabled):hover { transform: translateY(-1px); }
-  .hint-count { font-size: 12px; color: var(--muted); }
-  .hint-text {
-    margin-top: 14px;
-    padding: 12px 14px;
-    background: #10202a;
-    border: 1px solid #1e3a4a;
-    border-radius: 10px;
-    font-size: 14px;
-    line-height: 1.5;
-    color: #bfe6ff;
-    display: none;
-  }
-  .hint-text.show { display: block; }
-
-  .footer-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
-
-  .jev-card {
-    border: 1px solid #3a2a5c;
-    background: #140f20;
-  }
-  .jev-label {
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #b39ddb;
-  }
-  .jev-score {
-    font-variant-numeric: tabular-nums;
-    font-size: 22px;
-    font-weight: 600;
-    color: #b39ddb;
-  }
-  .jev-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .jev-bar-track {
-    height: 8px;
-    border-radius: 4px;
-    background: #1f1730;
-    margin-top: 10px;
-    overflow: hidden;
-  }
-  .jev-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #7c5cbf, #b39ddb);
-    width: 0%;
-    transition: width 220ms ease;
-  }
-
-  .reveal-box {
-    margin-top: 22px;
-    border: 1px dashed #5a3a1a;
-    border-radius: 10px;
-    padding: 10px 14px;
-  }
-  .reveal-box summary {
-    cursor: pointer;
-    font-size: 12px;
-    color: #e2a94f;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .reveal-box .reveal-warning {
-    font-size: 11px;
-    color: #8b98a5;
-    margin-top: 4px;
-  }
-  .reveal-box .reveal-text {
-    margin-top: 10px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #f0d9b5;
-  }
-
-  #confetti {
-    position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 50;
-  }
-  .confetti-piece {
-    position: absolute; top: -10px; width: 6px; height: 10px; border-radius: 1px;
-    animation: fall 1400ms linear forwards;
-  }
-  @keyframes fall {
-    to { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+  details.reveal { margin-top: 12px; border: 1px dashed #5a3a1a; border-radius: 10px; padding: 8px 12px; }
+  details.reveal summary { cursor: pointer; font-size: 12px; color: var(--amber); letter-spacing: 0.04em; text-transform: uppercase; }
+  details.reveal p { font-size: 13px; line-height: 1.5; color: #f0d9b5; }
+  .dev-line { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  ul.howto { padding-left: 18px; line-height: 1.6; font-size: 14px; }
+  @media (max-width: 520px) {
+    .pixel-grid { gap: 2px; }
+    .card { padding: 16px; }
   }
 </style>
 </head>
 <body>
-<div id="confetti"></div>
-<div class="wrap">
-  <h1>DSO429 · Live Answer Check</h1>
-  <div class="subtitle">Demo build — placeholder question, not the real midterm content.</div>
-
-  <div class="card">
-    <div class="question" id="questionText">Loading question…</div>
-  </div>
-
-  <div class="card">
-    <textarea id="answerBox" placeholder="Start typing your answer…"></textarea>
-  </div>
-
-  <div class="card">
-    <div class="meter-row">
-      <div class="meter-label">Similarity</div>
-      <div class="live-dot" id="liveDot"></div>
-      <div class="score-num" id="scoreNum">0%</div>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-row">
+      <div class="brand" id="brand">Live Answer Lab</div>
+      <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">connecting</span></div>
     </div>
-    <div class="threshold-line"><div class="threshold-marker" id="thresholdMarker"></div></div>
-    <div class="pixel-grid" id="pixelGrid"></div>
-    <div class="trend" id="trend">&nbsp;</div>
-    <div class="spark" id="spark"></div>
-    <div class="trend" id="matchedRef" style="display: none;"></div>
+    <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="demo-nav" id="demoNav" hidden></div>
   </div>
-
-  <div class="card jev-card">
-    <div class="meter-row">
-      <div class="jev-label">Jev correctness (experimental)</div>
-      <div class="jev-score" id="jevScore">—</div>
-    </div>
-    <div class="jev-bar-track"><div class="jev-bar-fill" id="jevBarFill"></div></div>
-    <div class="jev-meta" id="jevMeta">Side-by-side test against the cosine-similarity meter above. Not used for hints or scoring.</div>
-  </div>
-
-  <div class="card">
-    <div class="hint-area">
-      <button id="hintBtn" disabled>Get a hint</button>
-      <div class="hint-count" id="hintCount">— hints left</div>
-    </div>
-    <div class="hint-text" id="hintText"></div>
-  </div>
-
-  <div class="footer-note">Similarity is computed locally against a hidden reference answer. Hints call an LLM and are limited.</div>
-
-  <details class="reveal-box" id="revealBox" style="display: none;">
-    <summary>Reveal reference answer (demo only)</summary>
-    <div class="reveal-warning">Visible only because DEMO_MODE=true on the server. Turn this off before running with real students.</div>
-    <div class="reveal-text" id="revealText">Loading…</div>
-  </details>
 </div>
+<div class="wrap" id="app"><div class="card muted">Loading…</div></div>
 
 <script>
-const PIXEL_COUNT = 24;
-const grid = document.getElementById('pixelGrid');
-const pixels = [];
-for (let i = 0; i < PIXEL_COUNT; i++) {
-  const d = document.createElement('div');
-  d.className = 'pixel';
-  grid.appendChild(d);
-  pixels.push(d);
-}
+const STORAGE_KEY = 'live-answer-lab-v1';
+const JEV_THROTTLE_MS = 500;
+const PIXELS = 24;
 
-const SPARK_LEN = 30;
-const sparkEl = document.getElementById('spark');
-const sparkBars = [];
-for (let i = 0; i < SPARK_LEN; i++) {
-  const b = document.createElement('div');
-  b.className = 'spark-bar';
-  b.style.height = '2px';
-  sparkEl.appendChild(b);
-  sparkBars.push(b);
-}
-const sparkHistory = [];
+let A = null;          // assignment config from the server
+let S = null;          // student state, saved to localStorage
+let reveal = null;     // demo-mode answer key, fetched on demand
+let liveUi = null;     // handles for the live question on screen
+let jevWs = null, jevSeq = 0;
+const jevShown = {};   // question id -> newest seq displayed
+let cosineWs = null;
+let jevTimer = null, jevLastSent = 0;
 
-const answerBox = document.getElementById('answerBox');
-const scoreNum = document.getElementById('scoreNum');
-const trendEl = document.getElementById('trend');
-const hintBtn = document.getElementById('hintBtn');
-const hintCount = document.getElementById('hintCount');
-const hintText = document.getElementById('hintText');
-const thresholdMarker = document.getElementById('thresholdMarker');
-
-let threshold = 0.55;
-let maxHints = 3;
-let hintsUsed = 0;
-let sessionId = 'anon';
-let lastScore = 0;
-let belowThreshold = true;
-let confettiFired = false;
-let debounceTimer = null;
-let ws = null;
-let demoMode = false;
-const matchedRefEl = document.getElementById('matchedRef');
-
-// --- Jev experimental panel: separate connection, separate throttle,
-// sequence-numbered so a slow response can never overwrite a newer one.
-let jevWs = null;
-let jevSeq = 0;
-let jevLastDisplayedSeq = -1;
-let jevDebounceTimer = null;
-let jevLastSentAt = 0;
-const JEV_THROTTLE_MS = 500; // slower than the 180ms cosine-sim throttle --
-// Jev's own per-request latency (measured: 92ms-1.7s tail) can exceed a
-// faster interval, so this cadence keeps in-flight requests manageable.
-const jevScoreEl = document.getElementById('jevScore');
-const jevBarFillEl = document.getElementById('jevBarFill');
-const jevMetaEl = document.getElementById('jevMeta');
-
-function connectJevWs() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  jevWs = new WebSocket(`${proto}://${location.host}/ws/jev`);
-  jevWs.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
-    if (data.type !== 'jev') return;
-    if (data.seq < jevLastDisplayedSeq) return; // stale response, discard
-    jevLastDisplayedSeq = data.seq;
-    if (data.error) {
-      jevMetaEl.textContent = `Error: ${data.error}`;
-      return;
-    }
-    const pct = Math.round(data.score * 100);
-    jevScoreEl.textContent = pct + '%';
-    jevBarFillEl.style.width = pct + '%';
-    jevMetaEl.textContent = `latency: ${data.latency_ms}ms · seq ${data.seq}`;
-  };
-  jevWs.onclose = () => setTimeout(connectJevWs, 1000);
-}
-
-function jevSendUpdate() {
-  if (jevWs && jevWs.readyState === WebSocket.OPEN) {
-    jevSeq++;
-    jevWs.send(JSON.stringify({ text: answerBox.value, seq: jevSeq }));
-    jevMetaEl.textContent = `checking… (seq ${jevSeq})`;
+// ---------- helpers ----------
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'text') node.textContent = v;
+    else if (k === 'class') node.className = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v === true ? '' : v);
   }
-}
-
-function jevScheduleSend() {
-  const now = Date.now();
-  const elapsed = now - jevLastSentAt;
-  clearTimeout(jevDebounceTimer);
-  if (elapsed >= JEV_THROTTLE_MS) {
-    jevLastSentAt = now;
-    jevSendUpdate();
-  } else {
-    jevDebounceTimer = setTimeout(() => {
-      jevLastSentAt = Date.now();
-      jevSendUpdate();
-    }, JEV_THROTTLE_MS - elapsed);
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
   }
+  return node;
 }
-
-function colorForScore(s) {
-  // red -> yellow -> green
-  if (s < 0.5) {
-    const t = s / 0.5;
-    return lerpColor([255, 77, 94], [255, 203, 71], t);
-  } else {
-    const t = (s - 0.5) / 0.5;
-    return lerpColor([255, 203, 71], [61, 220, 132], t);
-  }
-}
-function lerpColor(a, b, t) {
-  const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+function pct(score) { return score == null ? '—' : Math.round(score * 100) + '%'; }
+function lerp(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
+function colorFor(s) {
+  const c = s < 0.5 ? lerp([255, 77, 94], [255, 203, 71], s / 0.5) : lerp([255, 203, 71], [61, 220, 132], (s - 0.5) / 0.5);
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
-
-let displayedScore = 0;
-let scoreAnimFrame = null;
-
-function animateScoreTo(target) {
-  cancelAnimationFrame(scoreAnimFrame);
-  const start = displayedScore;
-  const startTime = performance.now();
-  const duration = 150;
-  function step(now) {
-    const t = Math.min(1, (now - startTime) / duration);
-    displayedScore = start + (target - start) * t;
-    scoreNum.textContent = Math.round(displayedScore * 100) + '%';
-    scoreNum.style.color = colorForScore(displayedScore);
-    if (t < 1) scoreAnimFrame = requestAnimationFrame(step);
-  }
-  scoreAnimFrame = requestAnimationFrame(step);
-}
-
-function renderScore(score) {
-  animateScoreTo(score);
-
-  const lit = Math.round(score * PIXEL_COUNT);
-  pixels.forEach((p, i) => {
-    if (i < lit) {
-      const s = (i + 1) / PIXEL_COUNT;
-      const c = colorForScore(Math.min(score, s));
-      p.style.background = colorForScore(score);
-      p.style.boxShadow = `0 0 8px ${colorForScore(score)}`;
-      p.classList.add('lit');
-    } else {
-      p.style.background = '';
-      p.style.boxShadow = '';
-      p.classList.remove('lit');
-    }
+function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
+function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { return null; } }
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
   });
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* non-JSON error page */ }
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+function splitSentences(text) { return (text || '').split(/(?<=[.!?])\s+/).filter(Boolean); }
 
-  if (score > lastScore + 0.005) {
-    trendEl.textContent = '▲ rising';
-    trendEl.className = 'trend up';
-  } else if (score < lastScore - 0.005) {
-    trendEl.textContent = '▼ falling';
-    trendEl.className = 'trend down';
-  } else {
-    trendEl.textContent = '';
+// ---------- state ----------
+function freshAnswer(q) {
+  return q.type === 'live'
+    ? { text: '', score: null, hints: [] }
+    : { ai_answer: q.seed_answer, previous_answer: null, score: null, fixed: null, fixed_count: null, solved: false, rounds: [], draft: '' };
+}
+function freshState() {
+  const answers = {}, feedback = {};
+  for (const q of A.questions) { answers[q.id] = freshAnswer(q); feedback[q.id] = ''; }
+  return {
+    version: 1, sessionId: A.session_id, startedAt: new Date().toISOString(),
+    view: 'intro', student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null,
+  };
+}
+function reconcileState(saved) {
+  if (!saved || saved.version !== 1) return freshState();
+  for (const q of A.questions) {
+    if (!saved.answers[q.id]) saved.answers[q.id] = freshAnswer(q);
+    if (saved.feedback[q.id] == null) saved.feedback[q.id] = '';
   }
-
-  sparkHistory.push(score);
-  if (sparkHistory.length > SPARK_LEN) sparkHistory.shift();
-  sparkBars.forEach((b, i) => {
-    const idx = i - (SPARK_LEN - sparkHistory.length);
-    if (idx < 0) { b.style.height = '2px'; b.style.background = '#243244'; return; }
-    const v = sparkHistory[idx];
-    b.style.height = Math.max(2, v * 28) + 'px';
-    b.style.background = colorForScore(v);
-    b.style.opacity = 0.9;
-  });
-
-  belowThreshold = score < threshold;
-  hintBtn.disabled = belowThreshold ? (hintsUsed >= maxHints) : true;
-  if (!belowThreshold) {
-    // Still allow re-checking a hint if they were below threshold recently? Keep simple: only enabled while below.
-  }
-
-  if (score >= 0.9 && !confettiFired) {
-    confettiFired = true;
-    fireConfetti();
-  }
-  if (score < 0.85) confettiFired = false;
-
-  lastScore = score;
+  const n = A.questions.length;
+  if (typeof saved.view === 'number' && saved.view >= n) saved.view = 'review';
+  return saved;
 }
 
-function fireConfetti() {
-  const host = document.getElementById('confetti');
-  const colors = ['#3ddc84', '#58a6ff', '#ffcb47', '#ff4d5e'];
-  for (let i = 0; i < 60; i++) {
-    const piece = document.createElement('div');
-    piece.className = 'confetti-piece';
-    piece.style.left = Math.random() * 100 + 'vw';
-    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
-    piece.style.animationDelay = (Math.random() * 300) + 'ms';
-    piece.style.animationDuration = (900 + Math.random() * 700) + 'ms';
-    host.appendChild(piece);
-    setTimeout(() => piece.remove(), 2200);
-  }
+// ---------- websockets ----------
+function setConn(on) {
+  document.getElementById('connDot').classList.toggle('on', on);
+  document.getElementById('connText').textContent = on ? 'live' : 'reconnecting';
 }
-
-function connectWs() {
+function connectJev() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/similarity`);
-  ws.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
-    if (data.type === 'similarity') {
-      renderScore(data.score);
-      if (demoMode && data.matched_reference) {
-        matchedRefEl.style.display = 'block';
-        matchedRefEl.textContent = `matched reference: ${data.matched_reference}`;
-        matchedRefEl.className = 'trend';
-      }
+  jevWs = new WebSocket(`${proto}://${location.host}/ws/jev`);
+  jevWs.onopen = () => {
+    setConn(true);
+    if (liveUi && S.answers[liveUi.qid].text.trim()) sendJev(liveUi.qid);
+  };
+  jevWs.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    if (d.type !== 'jev') return;
+    if (d.seq < (jevShown[d.question_id] ?? -1)) return; // stale: a newer score is already shown
+    jevShown[d.question_id] = d.seq;
+    const onScreen = liveUi && liveUi.qid === d.question_id;
+    if (d.error) { if (onScreen) liveUi.meter.status(`Scoring unavailable: ${d.error}`); return; }
+    S.answers[d.question_id].score = d.score;
+    saveState();
+    if (onScreen) {
+      liveUi.meter.set(d.score);
+      liveUi.meter.status(`scored by Jev · ${d.latency_ms} ms`);
+      liveUi.updateHint();
     }
   };
-  ws.onclose = () => setTimeout(connectWs, 1000);
+  jevWs.onclose = () => { setConn(false); setTimeout(connectJev, 1000); };
 }
-
-function sendUpdate() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ text: answerBox.value }));
+function sendJev(qid) {
+  jevLastSent = Date.now();
+  if (!jevWs || jevWs.readyState !== WebSocket.OPEN) return;
+  jevSeq++;
+  jevWs.send(JSON.stringify({ question_id: qid, text: S.answers[qid].text, seq: jevSeq }));
+  if (liveUi && liveUi.qid === qid) liveUi.meter.status('checking…');
+  if (cosineWs && cosineWs.readyState === WebSocket.OPEN) {
+    cosineWs.send(JSON.stringify({ question_id: qid, text: S.answers[qid].text }));
   }
 }
-
-const THROTTLE_MS = 180;
-let lastSentAt = 0;
-
-function scheduleSend() {
-  const now = Date.now();
-  const elapsed = now - lastSentAt;
-  clearTimeout(debounceTimer);
-  if (elapsed >= THROTTLE_MS) {
-    lastSentAt = now;
-    sendUpdate();
-  } else {
-    debounceTimer = setTimeout(() => {
-      lastSentAt = Date.now();
-      sendUpdate();
-    }, THROTTLE_MS - elapsed);
-  }
+function scheduleJev(qid) {
+  clearTimeout(jevTimer);
+  const wait = JEV_THROTTLE_MS - (Date.now() - jevLastSent);
+  if (wait <= 0) sendJev(qid); else jevTimer = setTimeout(() => sendJev(qid), wait);
 }
-
-answerBox.addEventListener('input', scheduleSend);
-answerBox.addEventListener('input', jevScheduleSend);
-
-hintBtn.addEventListener('click', async () => {
-  hintBtn.disabled = true;
-  hintBtn.textContent = 'Thinking…';
-  try {
-    const res = await fetch('/api/hint', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, text: answerBox.value }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      hintText.textContent = 'Hint unavailable: ' + data.error;
-      hintText.classList.add('show');
-    } else {
-      hintsUsed = data.hints_used;
-      hintText.textContent = data.hint;
-      hintText.classList.add('show');
-      updateHintCount();
+function connectCosine() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  cosineWs = new WebSocket(`${proto}://${location.host}/ws/cosine`);
+  cosineWs.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    if (liveUi && liveUi.qid === d.question_id && liveUi.cosine) {
+      liveUi.cosine.textContent = `dev · cosine similarity: ${pct(d.score)}`;
     }
-  } catch (e) {
-    hintText.textContent = 'Hint request failed.';
-    hintText.classList.add('show');
-  }
-  hintBtn.textContent = 'Get a hint';
-  hintBtn.disabled = !(belowThreshold && hintsUsed < maxHints);
-});
-
-function updateHintCount() {
-  const left = Math.max(0, maxHints - hintsUsed);
-  hintCount.textContent = `${left} hint${left === 1 ? '' : 's'} left`;
+  };
+  cosineWs.onclose = () => setTimeout(connectCosine, 2000);
 }
 
-async function init() {
-  const res = await fetch('/api/question');
-  const data = await res.json();
-  document.getElementById('questionText').textContent = data.question;
-  demoMode = !!data.demo_mode;
-  threshold = data.threshold;
-  maxHints = data.max_hints;
-  sessionId = data.session_id;
-  thresholdMarker.style.left = (threshold * 100) + '%';
-  updateHintCount();
-  connectWs();
-  connectJevWs();
-
-  if (data.demo_mode) {
-    const revealBox = document.getElementById('revealBox');
-    const revealText = document.getElementById('revealText');
-    revealBox.style.display = 'block';
-    revealBox.addEventListener('toggle', async () => {
-      if (revealBox.open && revealText.textContent === 'Loading…') {
-        const r = await fetch('/api/reveal-answer');
-        const d = await r.json();
-        if (d.reference_answers) {
-          revealText.innerHTML = Object.entries(d.reference_answers)
-            .map(([label, text]) => `<p><strong>${label}:</strong> ${text}</p>`)
-            .join('');
-        } else {
-          revealText.textContent = 'Unavailable.';
-        }
-      }
-    }, { once: false });
+// ---------- shared components ----------
+function makeMeter(label) {
+  const num = el('div', { class: 'score-num', text: '—' });
+  const grid = el('div', { class: 'pixel-grid' });
+  const pixels = Array.from({ length: PIXELS }, () => grid.appendChild(el('div', { class: 'pixel' })));
+  const status = el('div', { class: 'meter-status', text: ' ' });
+  const root = el('div', {}, el('div', { class: 'meter-row' }, el('div', { class: 'meter-label', text: label }), num), grid, status);
+  let shown = 0, raf = null;
+  function paint(score) {
+    const lit = Math.round(score * PIXELS), color = colorFor(score);
+    pixels.forEach((p, i) => {
+      p.style.background = i < lit ? color : '';
+      p.style.boxShadow = i < lit ? `0 0 8px ${color}` : '';
+    });
   }
+  return {
+    root,
+    set(score) {
+      cancelAnimationFrame(raf);
+      if (score == null) { num.textContent = '—'; num.style.color = ''; paint(0); return; }
+      const start = shown, t0 = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / 180);
+        shown = start + (score - start) * t;
+        num.textContent = Math.round(shown * 100) + '%';
+        num.style.color = colorFor(shown);
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      paint(score);
+    },
+    status(text) { status.textContent = text; },
+  };
+}
+function revealBox(q) {
+  if (!A.demo_mode) return null;
+  const body = el('div', {}, el('p', { class: 'muted', text: 'Loading…' }));
+  const box = el('details', { class: 'reveal' }, el('summary', { text: 'Reveal answer key (demo only)' }), body);
+  box.addEventListener('toggle', async () => {
+    if (!box.open) return;
+    try {
+      reveal = reveal || await api('/api/reveal');
+      const r = reveal[q.id];
+      body.replaceChildren(
+        el('p', {}, el('strong', { text: 'Reference: ' }), r.reference_answer),
+        r.mistakes.length ? el('p', {}, el('strong', { text: 'Planted mistakes: ' }), r.mistakes.map((m, i) => `(${i + 1}) ${m} `)) : null,
+      );
+    } catch (e) { body.replaceChildren(el('p', { text: `Unavailable: ${e.message}` })); }
+  });
+  return box;
+}
+
+// ---------- views ----------
+function render() {
+  liveUi = null;
+  const app = document.getElementById('app');
+  app.replaceChildren();
+  renderChrome();
+  if (S.view === 'intro') app.appendChild(viewIntro());
+  else if (S.view === 'review') app.appendChild(viewReview());
+  else if (S.view === 'done') app.appendChild(viewDone());
+  else app.appendChild(viewQuestion(S.view));
+  window.scrollTo({ top: 0 });
+}
+
+function renderChrome() {
+  document.getElementById('brand').textContent = A.title;
+  document.title = A.title;
+  const done = A.questions.filter((q) => S.feedback[q.id].trim()).length;
+  const frac = S.view === 'done' ? 1 : done / A.questions.length;
+  document.getElementById('progressFill').style.width = `${Math.round(frac * 100)}%`;
+  const nav = document.getElementById('demoNav');
+  nav.hidden = !A.demo_mode;
+  if (!A.demo_mode) return;
+  const go = (view) => () => { S.view = view; saveState(); render(); };
+  nav.replaceChildren(
+    el('button', { class: `chip${S.view === 'intro' ? ' active' : ''}`, text: 'Intro', onclick: go('intro') }),
+    ...A.questions.map((q, i) => el('button', { class: `chip${S.view === i ? ' active' : ''}`, text: `Q${i + 1} ${q.type === 'live' ? '·live' : '·AI fix'}`, onclick: go(i) })),
+    el('button', { class: `chip${S.view === 'review' ? ' active' : ''}`, text: 'Review', onclick: go('review') }),
+    el('button', { class: 'chip', text: 'Reset (demo)', onclick: () => { if (confirm('Clear all answers and start over?')) { S = freshState(); saveState(); render(); } } }),
+  );
+}
+
+function viewIntro() {
+  const name = el('input', { type: 'text', id: 'name', autocomplete: 'name', value: S.student.name });
+  const sid = el('input', { type: 'text', id: 'sid', value: S.student.id });
+  const start = el('button', { class: 'btn', text: S.student.name ? 'Continue' : 'Start' });
+  const check = () => { start.disabled = !(name.value.trim() && sid.value.trim()); };
+  name.addEventListener('input', check); sid.addEventListener('input', check); check();
+  start.addEventListener('click', () => {
+    S.student = { name: name.value.trim(), id: sid.value.trim() };
+    if (S.view === 'intro') S.view = 0;
+    saveState(); render();
+  });
+  const live = A.questions.filter((q) => q.type === 'live').length;
+  const fix = A.questions.length - live;
+  return el('div', {},
+    el('div', { class: 'card' },
+      el('h1', { text: A.title }),
+      el('div', { class: 'muted', text: A.subtitle }),
+      A.company_note ? el('p', { class: 'small muted', text: A.company_note }) : null,
+      el('ul', { class: 'howto' },
+        el('li', {}, el('strong', { text: `${live} live questions. ` }), 'Type your answer. An AI grader (Jev) scores how correct it is while you type. If your score is low, you can ask for a hint.'),
+        el('li', {}, el('strong', { text: `${fix} fix-the-AI questions. ` }), 'An AI answers the question with some mistakes. Point out what is wrong. The AI fixes only what you point out, and Jev scores each new version. Keep going until the answer is correct.'),
+        el('li', {}, el('strong', { text: 'Question feedback, 1 credit each. ' }), 'After every question, say how the question worked for you. Any honest answer earns the credit.'),
+        el('li', {}, el('strong', { text: 'Grading consent. ' }), 'At the end you choose whether Claude Code may help grade your work.'),
+      ),
+      el('label', { class: 'field', for: 'name', text: 'Full name' }), name,
+      el('label', { class: 'field', for: 'sid', text: 'Student ID' }), sid,
+      el('div', { class: 'nav-row', style: 'margin-top:16px' }, el('span'), start),
+    ),
+  );
+}
+
+function questionFeedbackCard(q, onChange) {
+  const box = el('textarea', { class: 'short', id: `fb-${q.id}`, placeholder: 'Was the question clear? Was it too easy or too hard? Did the live score feel fair?' });
+  box.value = S.feedback[q.id];
+  box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); onChange(); renderChrome(); });
+  return el('div', { class: 'card feedback-card' },
+    el('label', { class: 'field', for: `fb-${q.id}`, style: 'margin-top:0', text: 'Question feedback · 1 credit · required to continue' }),
+    box,
+  );
+}
+
+function navRow(index, canAdvance) {
+  const back = el('button', { class: 'btn secondary', text: '← Back', onclick: () => { S.view = index === 0 ? 'intro' : index - 1; saveState(); render(); } });
+  const last = index === A.questions.length - 1;
+  const next = el('button', { class: 'btn', text: last ? 'Review & submit →' : 'Next question →', onclick: () => { S.view = last ? 'review' : index + 1; saveState(); render(); } });
+  const update = () => { next.disabled = !canAdvance(); };
+  update();
+  return { root: el('div', { class: 'nav-row' }, back, next), update };
+}
+
+function viewQuestion(index) {
+  const q = A.questions[index];
+  const head = el('div', { class: 'card' },
+    el('div', { class: 'qhead' },
+      el('span', { class: 'badge', text: `Question ${index + 1} of ${A.questions.length}` }),
+      el('span', { class: 'badge', text: q.topic }),
+      el('span', { class: `badge ${q.type}`, text: q.type === 'live' ? 'live answer' : 'fix the AI' }),
+    ),
+    el('h2', { text: q.title }),
+    el('div', { class: 'prompt', text: q.prompt }),
+    revealBox(q),
+  );
+  const nav = navRow(index, () => S.feedback[q.id].trim().length > 0);
+  const body = q.type === 'live' ? liveBody(q) : correctionBody(q);
+  return el('div', {}, head, body, questionFeedbackCard(q, nav.update), nav.root);
+}
+
+function liveBody(q) {
+  const ans = S.answers[q.id];
+  const box = el('textarea', { id: `ans-${q.id}`, placeholder: 'Type your answer…' });
+  box.value = ans.text;
+  const meter = makeMeter('Correctness · scored live by Jev');
+  meter.set(ans.score);
+  meter.status(ans.score == null ? 'Start typing to get a score.' : 'last score');
+  const cosine = A.dev_cosine ? el('div', { class: 'dev-line', text: 'dev · cosine similarity: —' }) : null;
+
+  const hintBtn = el('button', { class: 'btn', text: 'Get a hint' });
+  const hintCount = el('div', { class: 'small muted' });
+  const hintList = el('ul', { class: 'hint-list' });
+  const drawHints = () => hintList.replaceChildren(...ans.hints.map((h) => el('li', { text: h })));
+  const updateHint = () => {
+    const left = A.max_hints - ans.hints.length;
+    hintCount.textContent = ans.score != null && ans.score >= A.hint_threshold
+      ? `${left} hint${left === 1 ? '' : 's'} left · hints unlock below ${Math.round(A.hint_threshold * 100)}%`
+      : `${left} hint${left === 1 ? '' : 's'} left`;
+    hintBtn.disabled = !(ans.score != null && ans.score < A.hint_threshold && left > 0);
+  };
+  hintBtn.addEventListener('click', async () => {
+    hintBtn.disabled = true; hintBtn.textContent = 'Thinking…';
+    try {
+      const d = await api('/api/hint', { session_id: S.sessionId, question_id: q.id, text: ans.text });
+      if (d.error) ans.hints.push(`Hint unavailable: ${d.detail || d.error}`);
+      else ans.hints.push(d.hint);
+      saveState(); drawHints();
+    } catch (e) { ans.hints.push(`Hint unavailable: ${e.message}`); drawHints(); }
+    hintBtn.textContent = 'Get a hint'; updateHint();
+  });
+  drawHints(); updateHint();
+
+  box.addEventListener('input', () => { ans.text = box.value; saveState(); scheduleJev(q.id); });
+  liveUi = { qid: q.id, meter, updateHint, cosine };
+  if (ans.text.trim() && ans.score == null) setTimeout(() => sendJev(q.id), 50);
+
+  return el('div', {},
+    el('div', { class: 'card' }, box),
+    el('div', { class: 'card' }, meter.root, cosine),
+    el('div', { class: 'card' }, el('div', { class: 'hint-row' }, hintBtn, hintCount), hintList),
+  );
+}
+
+function correctionBody(q) {
+  const ans = S.answers[q.id];
+  const roundsUsed = ans.rounds.length;
+  const outOfRounds = roundsUsed >= q.max_rounds;
+
+  const aiText = el('div', { class: 'ai-text' });
+  splitSentences(ans.ai_answer).forEach((s, i, all) => {
+    const isNew = ans.previous_answer != null && !splitSentences(ans.previous_answer).includes(s);
+    aiText.appendChild(isNew ? el('mark', { text: s }) : document.createTextNode(s));
+    if (i < all.length - 1) aiText.appendChild(document.createTextNode(' '));
+  });
+  const meter = makeMeter("Correctness of the AI's answer · Jev");
+  meter.set(ans.score);
+  const dots = el('div', { class: 'mistakes' },
+    el('span', { text: 'Mistakes fixed:' }),
+    Array.from({ length: q.mistake_count }, (_, i) => el('span', { class: `dot${ans.fixed && ans.fixed[i] ? ' fixed' : ''}` })),
+    el('span', { text: ans.fixed_count == null ? '' : `${ans.fixed_count} of ${q.mistake_count}` }),
+  );
+
+  let banner = null;
+  if (ans.solved) banner = el('div', { class: 'banner ok', text: `Solved in ${roundsUsed} round${roundsUsed === 1 ? '' : 's'}. The AI's answer is now correct.` });
+  else if (outOfRounds) banner = el('div', { class: 'banner warn', text: `No rounds left. Your rounds are recorded as they are.` });
+
+  const draft = el('textarea', { class: 'short', id: `draft-${q.id}`, placeholder: "Be specific: say which claim is wrong and why. The AI only changes what you point out." });
+  draft.value = ans.draft || '';
+  const send = el('button', { class: 'btn violet', text: 'Send to the AI' });
+  const roundInfo = el('div', { class: 'small muted', text: `Round ${Math.min(roundsUsed + 1, q.max_rounds)} of ${q.max_rounds}` });
+  const errorBox = el('div');
+  const updateSend = () => { send.disabled = ans.solved || outOfRounds || !draft.value.trim() || ans.score == null; };
+  draft.addEventListener('input', () => { ans.draft = draft.value; saveState(); updateSend(); });
+  send.addEventListener('click', async () => {
+    send.disabled = true; send.textContent = 'AI is revising…'; draft.disabled = true;
+    meter.status('The AI is revising, then Jev scores the new version…');
+    try {
+      const d = await api('/api/correction/round', { question_id: q.id, current_answer: ans.ai_answer, feedback: draft.value.trim() });
+      ans.rounds.push({
+        round: ans.rounds.length + 1, feedback: draft.value.trim(), revised_answer: d.revised_answer,
+        score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
+      });
+      ans.previous_answer = ans.ai_answer;
+      ans.ai_answer = d.revised_answer;
+      Object.assign(ans, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
+      saveState(); render();
+    } catch (e) {
+      errorBox.replaceChildren(el('div', { class: 'banner err', text: `That round failed: ${e.message}. Your feedback is kept; try again.` }));
+      send.textContent = 'Send to the AI'; draft.disabled = false; updateSend(); meter.status('');
+    }
+  });
+
+  if (ans.score == null) {
+    meter.status("Jev is scoring the AI's first answer…");
+    api('/api/correction/score', { question_id: q.id, answer: ans.ai_answer })
+      .then((d) => { Object.assign(ans, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); render(); })
+      .catch((e) => { meter.status(`Scoring unavailable: ${e.message}`); });
+  } else {
+    meter.status(roundsUsed ? `after round ${roundsUsed}` : "the AI's first answer");
+  }
+  updateSend();
+
+  const history = ans.rounds.length
+    ? el('div', { class: 'card' },
+        el('div', { class: 'meter-label', style: 'margin-bottom:8px', text: 'Your rounds' }),
+        el('ol', { class: 'rounds' }, ans.rounds.map((r) => el('li', {},
+          el('div', {}, el('strong', { text: `Round ${r.round}. ` }), `You: ${r.feedback}`),
+          el('div', { class: 'round-meta', text: `Jev ${pct(r.score)} · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
+        ))),
+      )
+    : null;
+
+  return el('div', {},
+    el('div', { class: 'card ai-card' },
+      el('div', { class: 'ai-label', text: roundsUsed ? `The AI's answer · after round ${roundsUsed} (changes highlighted)` : "The AI's answer" }),
+      aiText, dots,
+    ),
+    el('div', { class: 'card' }, meter.root),
+    el('div', { class: 'card' }, banner,
+      el('label', { class: 'field', for: `draft-${q.id}`, style: 'margin-top:0', text: "What's wrong with the AI's answer?" }),
+      draft, errorBox,
+      el('div', { class: 'nav-row', style: 'margin-top:12px' }, roundInfo, send),
+    ),
+    history,
+  );
+}
+
+function viewReview() {
+  const rows = A.questions.map((q, i) => {
+    const ans = S.answers[q.id];
+    const status = q.type === 'live'
+      ? (ans.text.trim() ? `answered · last score ${pct(ans.score)}` : 'not answered')
+      : (ans.solved ? `solved in ${ans.rounds.length} round${ans.rounds.length === 1 ? '' : 's'}` : `${ans.rounds.length} round${ans.rounds.length === 1 ? '' : 's'} · not solved`);
+    const fb = S.feedback[q.id].trim();
+    return el('div', { class: 'review-row' },
+      el('div', {}, el('strong', { text: `Q${i + 1}. ${q.title}` }), el('div', { class: 'small muted', text: status })),
+      el('div', { class: `small ${fb ? 'ok-text' : 'warn-text'}`, text: fb ? 'feedback ✓' : 'feedback missing' }),
+    );
+  });
+  const allFeedback = A.questions.every((q) => S.feedback[q.id].trim());
+  const consent = el('input', { type: 'checkbox', id: 'consent' });
+  consent.checked = S.consent;
+  consent.addEventListener('change', () => { S.consent = consent.checked; saveState(); });
+  const submit = el('button', { class: 'btn', text: 'Submit assignment' });
+  submit.disabled = !allFeedback;
+  const errorBox = el('div');
+  submit.addEventListener('click', async () => {
+    submit.disabled = true; submit.textContent = 'Submitting… (re-scoring every answer)';
+    try {
+      const answers = {};
+      for (const q of A.questions) {
+        const a = S.answers[q.id];
+        answers[q.id] = q.type === 'live'
+          ? { type: 'live', text: a.text, last_live_score: a.score, hints: a.hints }
+          : { type: 'correction', ai_answer: a.ai_answer, rounds: a.rounds, solved: a.solved, fixed_count: a.fixed_count, last_live_score: a.score };
+      }
+      const d = await api('/api/submit', {
+        student: S.student, session_id: S.sessionId, started_at: S.startedAt,
+        consent: S.consent, answers, feedback: S.feedback,
+      });
+      S.submitted = d; S.view = 'done'; saveState(); render();
+    } catch (e) {
+      errorBox.replaceChildren(el('div', { class: 'banner err', text: `Submit failed: ${e.message}` }));
+      submit.disabled = false; submit.textContent = 'Submit assignment';
+    }
+  });
+  return el('div', {},
+    el('div', { class: 'card' }, el('h2', { text: 'Review' }), el('div', { class: 'small muted', style: 'margin-bottom:8px', text: `${S.student.name} · ${S.student.id}` }), rows),
+    el('div', { class: 'card' },
+      el('label', { class: 'consent', for: 'consent' }, consent,
+        el('span', {}, el('strong', { text: 'I agree that Claude Code, an AI tool, may be used to help grade this assignment. ' }),
+          'A TA reviews every AI-assisted grade. If you leave this box unchecked, your assignment is graded by hand.')),
+    ),
+    allFeedback ? null : el('div', { class: 'banner warn', text: 'Every question needs its feedback box filled in before you can submit.' }),
+    errorBox,
+    el('div', { class: 'nav-row' },
+      el('button', { class: 'btn secondary', text: '← Back', onclick: () => { S.view = A.questions.length - 1; saveState(); render(); } }),
+      submit),
+  );
+}
+
+function viewDone() {
+  const d = S.submitted;
+  const rows = A.questions.map((q, i) => {
+    const s = d.server_scores[q.id] || {};
+    const detail = s.error ? `not scored: ${s.error}`
+      : q.type === 'live' ? `Jev ${pct(s.score)}`
+      : `Jev ${pct(s.score)} · ${s.fixed_count} of ${q.mistake_count} mistakes fixed${s.solved ? ' · solved' : ''}`;
+    return el('div', { class: 'review-row' }, el('strong', { text: `Q${i + 1}. ${q.title}` }), el('span', { class: 'small muted', text: detail }));
+  });
+  const download = el('button', { class: 'btn secondary', text: 'Download a copy (JSON)' });
+  download.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(d.record, null, 2)], { type: 'application/json' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `${d.submission_id}.json` });
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  return el('div', {},
+    el('div', { class: 'card' },
+      el('h2', { text: 'Submitted' }),
+      el('p', { class: 'muted', text: `Submission ID: ${d.submission_id}` }),
+      el('p', { class: 'small muted', text: 'The server re-scored every answer at submission. These are the scores that were recorded:' }),
+      rows,
+      el('p', { class: 'small muted', text: `Question feedback: ${d.feedback_credits} of ${A.questions.length} credits. Claude Code grading: ${d.record.consent_claude_code_grading ? 'allowed' : 'not allowed (graded by hand)'}.` }),
+      el('div', { class: 'nav-row' }, download,
+        A.demo_mode ? el('button', { class: 'btn', text: 'Start over (demo)', onclick: () => { S = freshState(); saveState(); render(); } }) : el('span')),
+    ),
+  );
+}
+
+// ---------- boot ----------
+async function init() {
+  try {
+    A = await api('/api/assignment');
+  } catch (e) {
+    document.getElementById('app').replaceChildren(el('div', { class: 'card banner err', text: `Could not load the assignment: ${e.message}` }));
+    return;
+  }
+  S = reconcileState(loadState());
+  saveState();
+  render();
+  connectJev();
+  if (A.dev_cosine) connectCosine();
 }
 init();
 </script>

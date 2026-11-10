@@ -1,161 +1,47 @@
 import asyncio
 import json
 import os
+import re
 import secrets
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-import torch
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sentence_transformers import SentenceTransformer, util
-
-# Each encode() call defaults to using all CPU cores for intra-op
-# parallelism. With many concurrent small requests (one per student), that
-# causes threads to compete with each other instead of running in parallel.
-# Capping to 1 thread per call lets the ThreadPoolExecutor in the websocket
-# handler parallelize *across* requests instead, which is the win we want.
-torch.set_num_threads(1)
 
 ROOT_DIR = Path(__file__).parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
 STATIC_DIR = ROOT_DIR / "static"
+QUESTIONS_PATH = Path(os.environ.get("QUESTIONS_PATH", ROOT_DIR / "backend" / "questions.json"))
+SUBMISSIONS_DIR = Path(os.environ.get("SUBMISSIONS_DIR", ROOT_DIR / "submissions"))
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-SIMILARITY_THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.55"))
+JEV_MODEL = os.environ.get("JEV_MODEL", "typesafe/jev-1.13")
+HINT_THRESHOLD = float(os.environ.get("HINT_THRESHOLD", "0.5"))
+PASS_THRESHOLD = float(os.environ.get("PASS_THRESHOLD", "0.8"))
 MAX_HINTS = int(os.environ.get("MAX_HINTS", "3"))
-# Exposes /api/reveal-answer so you can see the reference answer while
-# demoing. MUST be set to false (or unset) before running this with real
-# students, or it hands them the answer.
+# Exposes reference answers and a question navigator for demos. MUST be
+# false for any run with real students: it hands them the answer key.
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
+# Dev-only cosine-similarity readout, kept for comparison with Jev. Off by
+# default so the deployed build doesn't need PyTorch.
+DEV_COSINE = os.environ.get("DEV_COSINE", "false").lower() == "true"
 
-# Placeholder DSO429-flavored question. Swap in the real midterm question +
-# reference answer before the actual exam.
-#
-# WHEN YOU CHANGE THIS QUESTION: JEV_QUESTIONS below (the "instructions"
-# and "criteria" text) is written for THIS question's specific content --
-# it names the two required concepts directly. Tested in
-# scratchpad/jev_generic_instructions_test.py: a version that doesn't name
-# the specific concepts drops a correct answer's score from 90% to 45%.
-# So swapping REFERENCE_ANSWERS alone is not enough -- JEV_QUESTIONS must
-# be rewritten by hand for the new question too, or Jev's correctness
-# check will silently keep judging against the OLD question's content.
-QUESTION_TEXT = (
-    "A local coffee retailer wants to let customers pre-order seasonal "
-    "drinks and pay a deposit that is automatically refunded if the store "
-    "fails to fulfill the order by the promised pickup time. Explain how a "
-    "smart contract could be used to implement this, and name one real "
-    "risk or limitation of relying on it."
-)
+DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Multiple valid phrasings of the same correct answer. A student's answer is
-# scored against ALL of them and the best (max) match wins. This is what
-# lets a correct answer in different wording/register/framing score well
-# without being penalized for not matching one specific phrasing.
-#
-# Tested via scratchpad/multi_ref_test.py: this meaningfully closes the
-# false-negative gap (a correct 4th independent phrasing went 61.3% ->
-# 79.8%). It does NOT fix the false-positive gap -- a wrong answer with
-# reference-matching vocabulary scores just as high as with one reference.
-# That's expected and is why actual grading should not be based on this
-# live number; see README "Known limitations."
-REFERENCE_ANSWERS = {
-    "technical": (
-        "A smart contract on a blockchain could hold the customer's deposit in "
-        "escrow when the pre-order is placed. The contract's code encodes the "
-        "pickup deadline as a condition: if the store confirms fulfillment "
-        "before the deadline, the deposit is released to the store; if the "
-        "deadline passes without confirmation, the contract automatically "
-        "refunds the customer, with no manual intervention needed from either "
-        "party. This removes the need to trust the store to issue refunds "
-        "voluntarily, since the rule is enforced by code once deployed. A real "
-        "risk is that the contract depends on an outside system, an oracle, to "
-        "report whether the order was actually fulfilled in the physical "
-        "world; if that oracle is wrong, unavailable, or manipulated, the "
-        "contract will execute the wrong outcome even though the code itself "
-        "ran correctly."
-    ),
-    "plain_language": (
-        "You could set up an automated agreement where money is locked up "
-        "until either side proves the deal went through by a set time; if "
-        "nobody confirms in time, whoever paid gets their money back with "
-        "nobody having to manually process it. The catch is you need some "
-        "trustworthy way to know in the first place whether the real-world "
-        "delivery happened, and that outside check is really the weak link."
-    ),
-    "alternate_framing": (
-        "Instead of relying on the coffee shop's word that it will issue a "
-        "refund, you could write the refund rule directly into code that runs "
-        "on its own once the deadline is reached, so neither the customer nor "
-        "the store has to take any action for the money to move correctly. "
-        "The main limitation is that the contract can only see what it's told "
-        "by an external data feed about whether the order was fulfilled, so "
-        "it's only as trustworthy as that outside data source."
-    ),
-    "structured_bullets": (
-        "Three things happen: the customer's payment goes into escrow at "
-        "order time. The contract checks a deadline against store "
-        "confirmation. If confirmed in time, funds go to the store; if not, "
-        "funds return to the customer automatically. The weak point is the "
-        "contract needs external proof that the order was actually "
-        "completed, and that proof source could be inaccurate or "
-        "compromised."
-    ),
-    "terse_minimal": (
-        "Hold the payment in a smart contract until the deadline. Auto-pay "
-        "the store if they confirm, auto-refund the customer if they don't, "
-        "no human needed either way. Biggest weakness: it trusts whatever "
-        "outside source tells it the order was fulfilled."
-    ),
-    "rental_deposit_analogy": (
-        "It's similar to how a rental security deposit could be handled "
-        "automatically: the money sits untouched, and code releases it one "
-        "way or the other once a fixed date passes and some outside signal "
-        "says whether the tenant met the conditions. The whole system only "
-        "works if that outside signal is accurate, since the contract "
-        "itself has no way to check reality directly."
-    ),
-    "risk_first_structure": (
-        "The biggest weakness of this approach is that a smart contract "
-        "can't independently verify a real-world delivery, so it must trust "
-        "some outside oracle to report whether the order happened, and a "
-        "compromised or incorrect oracle breaks the whole system. That "
-        "said, the core mechanism is simple: deposit funds are held in "
-        "code-enforced escrow and released automatically to whichever party "
-        "the deadline-and-confirmation logic favors, without needing either "
-        "side to manually process a refund."
-    ),
-    "nonnative_style": (
-        "The money from customer is keep in the smart contract like a lock "
-        "box when order is place. If store say yes before time is up, money "
-        "go to store. If not confirm, money go back to customer by itself, "
-        "nobody need to do nothing. Problem is contract only know what "
-        "oracle tell it about real world, so if oracle wrong the contract "
-        "also wrong even code work fine."
-    ),
-}
+ASSIGNMENT = json.loads(QUESTIONS_PATH.read_text())
+QUESTIONS = {q["id"]: q for q in ASSIGNMENT["questions"]}
 
-print("Loading embedding model...")
-model = SentenceTransformer("all-MiniLM-L6-v2")
-reference_labels = list(REFERENCE_ANSWERS.keys())
-reference_embeddings = model.encode(
-    [REFERENCE_ANSWERS[label] for label in reference_labels],
-    convert_to_tensor=True,
-    normalize_embeddings=True,
-)
-print(f"Model ready. {len(reference_labels)} reference answers loaded.")
-
-# A new httpx.AsyncClient() per request (the old approach here) allocates
-# its own connection pool and TLS context every time and tears it down
-# right after -- on a memory-constrained instance, with Jev firing every
-# 500ms while a student types, that churn was a real contributor to an
-# out-of-memory crash observed on Render's free tier. One shared client
-# for the app's lifetime avoids it.
+# One shared client for the app's lifetime. A new client per request caused
+# an out-of-memory crash on Render's free tier.
 http_client: httpx.AsyncClient | None = None
 
 
@@ -169,18 +55,159 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-hint_counts: dict[str, int] = {}
+hint_counts: dict[tuple[str, str], int] = {}
 
 
-def compute_similarity(text: str) -> tuple[float, str]:
-    """Returns (best score, label of the reference answer it matched best)."""
+def get_question(question_id: str, expected_type: str | None = None) -> dict:
+    question = QUESTIONS.get(question_id)
+    if question is None or (expected_type and question["type"] != expected_type):
+        raise HTTPException(status_code=404, detail="unknown question")
+    return question
+
+
+def describe_error(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code == 401:
+            return "the scoring service's API key is invalid or expired"
+        if code == 402:
+            return "the scoring service's API key is out of credit"
+        if code == 429:
+            return "the scoring service is rate-limiting requests; try again in a moment"
+        return f"the scoring service returned an error ({code})"
+    if isinstance(exc, httpx.TimeoutException):
+        return "the scoring service took too long to answer"
+    if isinstance(exc, httpx.HTTPError):
+        return "could not reach the scoring service"
+    return getattr(exc, "detail", None) or str(exc)
+
+
+def auth_headers() -> dict:
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set")
+    return {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+
+
+async def jev_decide(state: dict, questions: dict) -> tuple[dict, float]:
+    """Calls the Jev decisions API. Returns (answers, latency_ms)."""
+    t0 = time.perf_counter()
+    resp = await http_client.post(
+        DECISIONS_URL,
+        headers=auth_headers(),
+        json={"model": JEV_MODEL, "state": state, "questions": questions},
+        timeout=15.0,
+    )
+    latency_ms = (time.perf_counter() - t0) * 1000
+    resp.raise_for_status()
+    return resp.json()["answers"], latency_ms
+
+
+async def score_live(question: dict, text: str) -> dict:
     if not text.strip():
-        return 0.0, reference_labels[0]
-    embedding = model.encode(text, convert_to_tensor=True, normalize_embeddings=True)
-    sims = util.cos_sim(embedding, reference_embeddings)[0]
-    best_idx = int(sims.argmax())
-    score = max(0.0, min(1.0, sims[best_idx].item()))
-    return score, reference_labels[best_idx]
+        return {"score": 0.0, "latency_ms": 0}
+    answers, latency_ms = await jev_decide(
+        {
+            "question": question["prompt"],
+            "reference_answer": question["reference_answer"],
+            "student_answer": text,
+        },
+        {"correct": {"type": "noul", **question["jev"]}},
+    )
+    return {"score": answers["correct"]["noul"], "latency_ms": round(latency_ms)}
+
+
+def mistake_check(mistake: dict) -> dict:
+    return {
+        "type": "noul",
+        "instructions": (
+            f"Is the AI's answer free of this error: {mistake['error']} The answer "
+            "is free of the error if it no longer makes that claim in any wording, "
+            "because the claim was removed or corrected."
+        ),
+        "criteria": {
+            "true": "The AI's answer does not make this claim.",
+            "false": "The AI's answer still makes this claim, in any wording.",
+        },
+    }
+
+
+async def score_correction(question: dict, ai_answer: str) -> dict:
+    """One Jev call scores overall correctness and checks each seeded mistake."""
+    checks = {"correct": {"type": "noul", **question["jev"]}}
+    for mistake in question["mistakes"]:
+        checks[mistake["id"]] = mistake_check(mistake)
+    answers, latency_ms = await jev_decide(
+        {
+            "question": question["prompt"],
+            "reference_answer": question["reference_answer"],
+            "ai_answer": ai_answer,
+        },
+        checks,
+    )
+    fixed = [answers[m["id"]]["noul"] >= 0.5 for m in question["mistakes"]]
+    score = answers["correct"]["noul"]
+    return {
+        "score": score,
+        "fixed": fixed,
+        "fixed_count": sum(fixed),
+        "solved": all(fixed) and score >= PASS_THRESHOLD,
+        "latency_ms": round(latency_ms),
+    }
+
+
+# The AI must fix only what the student points out. Without this, any LLM
+# fixes every mistake as soon as a student types "fix it", and the exercise
+# no longer tests whether the student can find the mistakes.
+REVISE_SYSTEM_PROMPT = (
+    "You wrote an answer to an exam question. A student is reviewing your answer "
+    "and gives you feedback. Revise your answer by applying the student's "
+    "feedback, following these rules exactly.\n"
+    "1. Change only the parts of your answer that the feedback addresses. Keep "
+    "every other sentence exactly as it is, word for word, including any errors "
+    "the student did not mention.\n"
+    "2. Apply the feedback faithfully even if you think it is wrong. Do not "
+    "argue, and do not add corrections of your own.\n"
+    "3. If the feedback does not say what is wrong (for example 'fix it' or "
+    "'this is wrong'), return your answer unchanged.\n"
+    "4. Return only the revised answer text, with no preamble, notes, or "
+    "quotation marks."
+)
+
+
+async def revise_answer(question: dict, current_answer: str, feedback: str) -> str:
+    resp = await http_client.post(
+        CHAT_URL,
+        headers=auth_headers(),
+        json={
+            "model": OPENROUTER_MODEL,
+            "messages": [
+                {"role": "system", "content": REVISE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Exam question:\n{question['prompt']}\n\n"
+                        f"Your current answer:\n{current_answer}\n\n"
+                        f"Student feedback:\n{feedback}\n\n"
+                        "Revised answer:"
+                    ),
+                },
+            ],
+            "max_tokens": 500,
+            "temperature": 0.2,
+        },
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip().strip('"')
+
+
+def public_question(question: dict) -> dict:
+    view = {k: question[k] for k in ("id", "type", "topic", "title", "prompt")}
+    if question["type"] == "correction":
+        view["seed_answer"] = question["seed_answer"]
+        view["mistake_count"] = len(question["mistakes"])
+        view["max_rounds"] = question.get("max_rounds", 5)
+    return view
 
 
 @app.get("/")
@@ -188,168 +215,99 @@ def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
-@app.get("/api/question")
-def get_question():
+@app.get("/api/assignment")
+def get_assignment():
     return {
-        "question": QUESTION_TEXT,
-        "threshold": SIMILARITY_THRESHOLD,
+        "title": ASSIGNMENT["title"],
+        "subtitle": ASSIGNMENT.get("subtitle", ""),
+        "company_note": ASSIGNMENT.get("company_note", ""),
+        "questions": [public_question(q) for q in ASSIGNMENT["questions"]],
+        "hint_threshold": HINT_THRESHOLD,
+        "pass_threshold": PASS_THRESHOLD,
         "max_hints": MAX_HINTS,
         "session_id": secrets.token_hex(8),
         "demo_mode": DEMO_MODE,
+        "dev_cosine": DEV_COSINE,
     }
 
 
-@app.get("/api/reveal-answer")
-def reveal_answer():
+@app.get("/api/reveal")
+def reveal():
     if not DEMO_MODE:
-        return {"error": "not_available"}
-    return {"reference_answers": REFERENCE_ANSWERS}
-
-
-@app.websocket("/ws/similarity")
-async def ws_similarity(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            data = json.loads(raw)
-            text = data.get("text", "")
-            score, best_ref = await asyncio.to_thread(compute_similarity, text)
-            await websocket.send_json(
-                {
-                    "type": "similarity",
-                    "score": score,
-                    "below_threshold": score < SIMILARITY_THRESHOLD,
-                    "matched_reference": best_ref,
-                }
-            )
-    except WebSocketDisconnect:
-        pass
-
-
-# Experimental side-by-side comparison: a correctness score from TypeSafe's
-# Jev decisions model, alongside the local cosine-similarity meter above.
-# Tested in scratchpad/jev_*.py -- 16/16 on the full case bank, including
-# the partial-credit case cosine similarity got wrong. Real per-request
-# latency (measured: 92ms-1.7s tail) can exceed the send interval, so
-# responses can arrive out of order; the frontend discards any response
-# older than the one already displayed (sequence-numbered).
-JEV_QUESTIONS = {
-    "correct": {
-        "type": "noul",
-        "instructions": (
-            "Does the student's answer demonstrate correct understanding of "
-            "the reference answer's core claims (the escrow/deadline "
-            "mechanism AND the oracle risk), even if phrased completely "
-            "differently? An answer covering only one of the two required "
-            "ideas is incomplete. The student may still be mid-answer; "
-            "judge based on what has been written so far."
-        ),
-        "criteria": {
-            "true": (
-                "Reasoning so far is correct and, if incomplete, is heading "
-                "toward covering both the mechanism and the risk."
-            ),
-            "false": (
-                "Reasoning is wrong or backwards, covers only one of the two "
-                "required ideas, or is just keywords with no explanation."
-            ),
-        },
+        raise HTTPException(status_code=404, detail="not available")
+    return {
+        q["id"]: {
+            "reference_answer": q["reference_answer"],
+            "mistakes": [m["error"] for m in q.get("mistakes", [])],
+        }
+        for q in ASSIGNMENT["questions"]
     }
-}
-
-
-async def compute_jev_correctness(text: str) -> tuple[float, float]:
-    """Returns (probability_correct, latency_ms)."""
-    if not text.strip() or not OPENROUTER_API_KEY:
-        return 0.0, 0.0
-    payload = {
-        "model": "typesafe/jev-1.13",
-        "state": {
-            "reference_answer": REFERENCE_ANSWERS["technical"],
-            "student_answer": text,
-        },
-        "questions": JEV_QUESTIONS,
-    }
-    t0 = asyncio.get_event_loop().time()
-    resp = await http_client.post(
-        "https://openrouter.ai/api/alpha/decisions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=10.0,
-    )
-    latency_ms = (asyncio.get_event_loop().time() - t0) * 1000
-    resp.raise_for_status()
-    prob = resp.json()["answers"]["correct"]["noul"]
-    return prob, latency_ms
 
 
 @app.websocket("/ws/jev")
 async def ws_jev(websocket: WebSocket):
+    """Scores live answers. Keeps only the newest text per question and runs
+    one Jev call at a time, so a student typing faster than Jev answers
+    never builds a backlog; intermediate keystrokes are skipped."""
     await websocket.accept()
+    pending: dict[str, dict] = {}
+    wake = asyncio.Event()
+
+    async def worker():
+        while True:
+            await wake.wait()
+            while pending:
+                question_id, msg = pending.popitem()
+                reply = {"type": "jev", "question_id": question_id, "seq": msg.get("seq", 0)}
+                try:
+                    question = get_question(question_id, "live")
+                    reply.update(await score_live(question, msg.get("text", "")))
+                except Exception as exc:  # noqa: BLE001
+                    reply["error"] = describe_error(exc)
+                try:
+                    await websocket.send_json(reply)
+                except Exception:  # noqa: BLE001
+                    return
+            wake.clear()
+
+    task = asyncio.create_task(worker())
     try:
         while True:
-            raw = await websocket.receive_text()
-            data = json.loads(raw)
-            text = data.get("text", "")
-            seq = data.get("seq", 0)
-            try:
-                prob, latency_ms = await compute_jev_correctness(text)
-                await websocket.send_json(
-                    {
-                        "type": "jev",
-                        "seq": seq,
-                        "score": prob,
-                        "latency_ms": round(latency_ms),
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001
-                await websocket.send_json({"type": "jev", "seq": seq, "error": str(exc)})
+            msg = json.loads(await websocket.receive_text())
+            pending[str(msg.get("question_id", ""))] = msg
+            wake.set()
     except WebSocketDisconnect:
         pass
+    finally:
+        task.cancel()
 
 
 @app.post("/api/hint")
 async def get_hint(payload: dict):
-    session_id = payload.get("session_id", "anon")
-    text = payload.get("text", "")
-    used = hint_counts.get(session_id, 0)
-
+    question = get_question(payload.get("question_id", ""), "live")
+    key = (payload.get("session_id", "anon"), question["id"])
+    used = hint_counts.get(key, 0)
     if used >= MAX_HINTS:
         return {"error": "no_hints_left", "hints_used": used, "max_hints": MAX_HINTS}
 
-    if not OPENROUTER_API_KEY:
-        return {"error": "no_api_key"}
-
+    text = payload.get("text", "")
     system_prompt = (
-        "You are a brief exam hint assistant. A student is answering an "
-        "exam question. You are given several valid phrasings of the "
-        "reference answer (hidden from the student, any one of them counts "
-        "as correct) and the student's current draft. Give ONE short hint "
-        "(1-2 sentences) pointing to a missing or underdeveloped idea in "
-        "their draft. Never reveal the reference answers' wording or give "
-        "the answer outright. Be encouraging and specific."
-    )
-    reference_block = "\n\n".join(
-        f"Valid phrasing {i + 1}:\n{answer}"
-        for i, answer in enumerate(REFERENCE_ANSWERS.values())
+        "You are a brief exam hint assistant. You are given an exam question, the "
+        "reference answer (hidden from the student), and the student's current "
+        "draft. Give ONE short hint (1-2 sentences) pointing to a missing or "
+        "underdeveloped idea in the draft. Never reveal the reference answer's "
+        "wording or give the answer outright. Be encouraging and specific."
     )
     user_prompt = (
-        f"Reference answers (hidden from student):\n\n{reference_block}\n\n"
+        f"Exam question:\n{question['prompt']}\n\n"
+        f"Reference answer (hidden from student):\n{question['reference_answer']}\n\n"
         f"Student's current draft:\n{text or '(empty so far)'}\n\n"
         "Give one short hint."
     )
-
     try:
         resp = await http_client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            CHAT_URL,
+            headers=auth_headers(),
             json={
                 "model": OPENROUTER_MODEL,
                 "messages": [
@@ -362,13 +320,102 @@ async def get_hint(payload: dict):
             timeout=20.0,
         )
         resp.raise_for_status()
-        body = resp.json()
-        hint_text = body["choices"][0]["message"]["content"].strip()
+        hint_text = resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as exc:  # noqa: BLE001
-        return {"error": "llm_failed", "detail": str(exc)}
+        return {"error": "llm_failed", "detail": describe_error(exc)}
 
-    hint_counts[session_id] = used + 1
+    hint_counts[key] = used + 1
     return {"hint": hint_text, "hints_used": used + 1, "max_hints": MAX_HINTS}
+
+
+@app.post("/api/correction/score")
+async def correction_score(payload: dict):
+    question = get_question(payload.get("question_id", ""), "correction")
+    answer = str(payload.get("answer", ""))[:4000]
+    try:
+        return await score_correction(question, answer)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=describe_error(exc)) from exc
+
+
+@app.post("/api/correction/round")
+async def correction_round(payload: dict):
+    question = get_question(payload.get("question_id", ""), "correction")
+    current_answer = str(payload.get("current_answer", ""))[:4000]
+    feedback = str(payload.get("feedback", "")).strip()[:2000]
+    if not feedback:
+        raise HTTPException(status_code=400, detail="feedback is empty")
+    try:
+        revised = await revise_answer(question, current_answer, feedback)
+        result = await score_correction(question, revised)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=describe_error(exc)) from exc
+    return {"revised_answer": revised, **result}
+
+
+async def rescore(question: dict, answer: dict) -> dict:
+    """Re-scores a submitted answer on the server, so the stored score
+    doesn't depend on anything the browser reported."""
+    try:
+        if question["type"] == "live":
+            return await score_live(question, str(answer.get("text", "")))
+        return await score_correction(question, str(answer.get("ai_answer", "")))
+    except Exception as exc:  # noqa: BLE001
+        return {"error": describe_error(exc)}
+
+
+@app.post("/api/submit")
+async def submit(payload: dict):
+    student = payload.get("student") or {}
+    name = str(student.get("name", "")).strip()
+    student_id = str(student.get("id", "")).strip()
+    if not name or not student_id:
+        raise HTTPException(status_code=400, detail="name and student ID are required")
+
+    answers = payload.get("answers") or {}
+    feedback = payload.get("feedback") or {}
+    server_scores = dict(
+        zip(
+            QUESTIONS.keys(),
+            await asyncio.gather(
+                *(rescore(q, answers.get(qid) or {}) for qid, q in QUESTIONS.items())
+            ),
+        )
+    )
+    feedback_credits = sum(1 for qid in QUESTIONS if str(feedback.get(qid, "")).strip())
+
+    submitted_at = datetime.now(timezone.utc)
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", student_id)[:40] or "anon"
+    submission_id = f"{safe_id}_{submitted_at.strftime('%Y%m%dT%H%M%SZ')}"
+    record = {
+        "submission_id": submission_id,
+        "submitted_at": submitted_at.isoformat(),
+        "student": {"name": name, "id": student_id},
+        "consent_claude_code_grading": bool(payload.get("consent")),
+        "client": {
+            "session_id": payload.get("session_id"),
+            "started_at": payload.get("started_at"),
+        },
+        "answers": answers,
+        "feedback": feedback,
+        "feedback_credits": feedback_credits,
+        "server_scores": server_scores,
+    }
+    SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    (SUBMISSIONS_DIR / f"{submission_id}.json").write_text(json.dumps(record, indent=2))
+    return {
+        "ok": True,
+        "submission_id": submission_id,
+        "server_scores": server_scores,
+        "feedback_credits": feedback_credits,
+        "record": record,
+    }
+
+
+if DEV_COSINE:
+    from backend.cosine import register_cosine_routes
+
+    register_cosine_routes(app, QUESTIONS)
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

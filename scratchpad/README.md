@@ -1,8 +1,18 @@
 # Testing scripts
 
 These scripts validate design decisions. They are not part of the
-application. Run them against a local server. `efficacy_test.py` and
-`multi_ref_test.py` run directly against the model.
+application. Install `requirements-dev.txt` to run them.
+
+`assignment_validation_test.py` tests the current assignment build. Run
+it against a local server on port 8001. The other scripts test the
+earlier single-question version. That version used `/ws/similarity` and
+a coffee-shop question, so they no longer match the running app.
+
+- `assignment_validation_test.py`: Checks Jev scores on correct, partial,
+  and wrong answers for each live question. For each fix-the-AI question,
+  it checks three things: vague feedback changes nothing, feedback about
+  one mistake fixes only that mistake, and complete feedback solves the
+  question.
 
 - `efficacy_test.py`: Measures how cosine similarity tracks answer
   quality. Compares keyword-dense wrong answers against correctly-reasoned

@@ -1,0 +1,114 @@
+{
+  "title": "Live Answer Lab",
+  "subtitle": "Demo assignment. Placeholder questions, not graded course content.",
+  "company_note": "Pedalwise is a fictional city bike-share company used in every question.",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "live",
+      "topic": "S12 · A/B testing",
+      "title": "Pick the right metric",
+      "prompt": "Pedalwise tests a new home screen in its bike-share app. Version B raises taps on the 'Unlock a bike' button by 8% compared with version A, but completed rides per user are the same in both versions. The product team wants to declare B the winner. Explain why tap rate may be the wrong success metric here, and say what Pedalwise should measure instead.",
+      "reference_answer": "Tap rate is a proxy, not the outcome Pedalwise cares about. More taps can come from a more prominent or more confusing button, accidental taps, or riders tapping again after a failed unlock, so taps can rise while nothing valuable changes. The business goal is rides and the revenue they bring, and completed rides did not move, so B has not shown any business value. Pedalwise should choose its primary metric before the test, such as completed rides or revenue per user, judge B on that metric, and use tap rate only as a secondary, diagnostic signal.",
+      "jev": {
+        "instructions": "Does the student's answer correctly explain (1) why tap rate is a poor success metric here, namely that it is a proxy that can rise without the real business outcome (rides or revenue) changing, and (2) what Pedalwise should measure instead, namely a business outcome such as completed rides, revenue per user, or retention, ideally chosen before the test? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
+        "criteria": {
+          "true": "Explains that taps are a proxy that can rise without more rides or revenue, and names a business outcome to measure instead, or is clearly heading toward both.",
+          "false": "Reasoning is wrong or backwards, covers only one of the two ideas, agrees that B should win on taps, or is just keywords with no explanation."
+        }
+      }
+    },
+    {
+      "id": "q2",
+      "type": "live",
+      "topic": "S13 · Choice models",
+      "title": "Read the coefficients",
+      "prompt": "Pedalwise fits a logit model to customers' choices between membership plans. The coefficient on 'includes e-bikes' is 0.60, and the coefficient on monthly price is -0.03 per dollar. A manager says, 'So customers value e-bike access at 60 cents.' Explain the manager's mistake and work out what customers are actually willing to pay for e-bike access.",
+      "reference_answer": "Logit coefficients are in units of utility, not dollars, so 0.60 cannot be read as 60 cents. The price coefficient converts utility into dollars: each extra dollar of monthly price lowers utility by 0.03. Willingness to pay for a feature is its coefficient divided by the size of the price coefficient: 0.60 / 0.03 = $20 per month. So customers value e-bike access at about $20 a month.",
+      "jev": {
+        "instructions": "Does the student's answer correctly explain (1) that logit coefficients are measured in utility, not dollars, so 0.60 is not 60 cents, and (2) that willingness to pay is the feature coefficient divided by the absolute value of the price coefficient, which gives 0.60 / 0.03 = $20 per month? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
+        "criteria": {
+          "true": "Identifies the utility-versus-dollars mistake and reaches about $20 per month by dividing by the price coefficient, or is clearly heading toward both.",
+          "false": "Accepts 60 cents, reaches a willingness to pay other than about $20 per month, uses the wrong formula, covers only one of the two ideas, or is just keywords."
+        }
+      }
+    },
+    {
+      "id": "q3",
+      "type": "correction",
+      "topic": "S14 · Bandits",
+      "title": "Fix the AI's explanation",
+      "prompt": "Pedalwise has three versions of a push notification that offers riders a discount on their next ride, and it must decide which version to send this month. Explain how a Thompson sampling bandit differs from a fixed A/B/C test, and name one situation where the fixed A/B/C test is still the better choice.",
+      "reference_answer": "A fixed A/B/C test splits riders evenly across the three versions for the whole test. It keeps sending the weaker versions the entire time, so Pedalwise loses responses it could have won, which is the regret of testing, and it gets a clean comparison only at the end. Thompson sampling keeps a belief about each version's response rate, usually a Beta distribution, draws a random sample from each belief for every rider, and sends the version with the highest draw. As evidence builds, traffic shifts toward the better versions while uncertain versions still get some traffic, so it explores and exploits at the same time and loses far fewer responses. A fixed test is still the better choice when Pedalwise needs a clean, unbiased estimate of how much better one version is, for example to report the result or to make a long-term decision, or when the campaign is too short for a bandit to learn.",
+      "seed_answer": "A fixed A/B/C test splits riders evenly across the three notifications. Since Pedalwise learns which notification works best at the end of the test, running the test costs nothing. Thompson sampling is smarter: for every rider, it looks at which notification currently has the highest average response rate and always sends that one, so no traffic is wasted on weaker versions. Because a bandit beats a fixed test on every measure, there is no situation where Pedalwise should run a fixed A/B/C test instead.",
+      "mistakes": [
+        {
+          "id": "m1",
+          "error": "Claims that running the fixed A/B/C test costs nothing, ignoring that it keeps sending weaker versions and loses responses (regret) while the test runs."
+        },
+        {
+          "id": "m2",
+          "error": "Describes Thompson sampling as always sending the version with the highest current average (a purely greedy rule), instead of sampling from a belief about each version so that uncertain versions still get explored."
+        },
+        {
+          "id": "m3",
+          "error": "Claims a bandit is always better, or that there is no situation where a fixed A/B/C test is the better choice."
+        }
+      ],
+      "max_rounds": 5,
+      "jev": {
+        "instructions": "Is the AI's answer fully correct? It must correctly explain how Thompson sampling differs from a fixed A/B/C test (the fixed test keeps sending weaker versions and loses responses while it runs; Thompson sampling samples from a belief about each version, shifting traffic toward better versions while still exploring uncertain ones) and name a valid situation where a fixed test is the better choice. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "criteria": {
+          "true": "Every claim is correct, the difference is explained correctly, and a valid situation that favors a fixed test is named.",
+          "false": "Contains at least one false claim, or leaves out the difference or the situation that favors a fixed test."
+        }
+      }
+    },
+    {
+      "id": "q4",
+      "type": "live",
+      "topic": "S15 · Supervised learning",
+      "title": "Read the train/test gap",
+      "prompt": "Pedalwise trains a model to predict which docking stations will run out of bikes in the next hour. The model is 99% accurate on its training data but only 71% accurate on held-out data it never saw. Explain what this gap means and one thing the team could do about it.",
+      "reference_answer": "The gap means the model is overfitting: it has memorized patterns and noise that are specific to the training data instead of learning patterns that carry over to new stations and hours. The 99% training score overstates how good it is; the 71% held-out score is the honest estimate of how it will do in practice. The team could use a simpler model with fewer features or shallower trees, add regularization, collect more training data, or choose the model's complexity using a validation set or cross-validation, keeping the test set untouched until the final check.",
+      "jev": {
+        "instructions": "Does the student's answer correctly explain (1) that the gap means overfitting, so the model fits the training data, including its noise, too closely and does not generalize, which makes the held-out score the honest estimate, and (2) at least one valid remedy, such as a simpler model, regularization, more training data, or choosing complexity with a validation set or cross-validation? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
+        "criteria": {
+          "true": "Identifies overfitting (or memorizing the training data) and gives at least one valid remedy, or is clearly heading toward both.",
+          "false": "Gives a wrong diagnosis (for example underfitting, or blaming the held-out data), gives no valid remedy, suggests a remedy that makes overfitting worse such as a more complex model, or is just keywords."
+        }
+      }
+    },
+    {
+      "id": "q5",
+      "type": "correction",
+      "topic": "Smart contracts",
+      "title": "Fix the AI's smart contract",
+      "prompt": "Pedalwise wants to hold each rider's $50 bike deposit in a smart contract and refund it automatically when the bike is returned to a station. Explain how this would work and describe one real limitation.",
+      "reference_answer": "When a rental starts, the smart contract takes the $50 deposit and holds it. The contract cannot see the physical world, so it relies on an outside data source, called an oracle: here, the docking station reporting that the bike was returned. When the oracle reports a return within the rental window, the contract automatically refunds the deposit to the rider with no staff involved; if no return is reported in time, the contract keeps the deposit. The rule is enforced by code, so riders do not have to trust Pedalwise to issue refunds. A real limitation is that the contract is only as reliable as the oracle: if a dock is faulty, offline, or tampered with, the contract refunds or keeps deposits wrongly even though its own code ran correctly. Another is that deployed contract code generally cannot be edited, so changing the rules means deploying a new contract or using an upgrade mechanism planned in advance.",
+      "seed_answer": "When a rental starts, the smart contract takes the rider's $50 deposit and holds it. Because the contract runs on the blockchain, it can detect by itself when the bike is docked at a station, so no outside data is needed. When it sees the bike return, it refunds the deposit automatically. Since the refund rule is written in code, it can never refund the wrong rider or keep a deposit by mistake. If Pedalwise later wants to change the deposit amount or the rental window, it can simply edit the deployed contract, just like updating a normal app.",
+      "mistakes": [
+        {
+          "id": "m1",
+          "error": "Claims the smart contract can detect the bike's return by itself, or that no outside data source (oracle) is needed."
+        },
+        {
+          "id": "m2",
+          "error": "Claims the contract can never refund or keep a deposit wrongly, ignoring that a faulty or tampered outside data source (oracle) causes wrong outcomes even when the code runs correctly."
+        },
+        {
+          "id": "m3",
+          "error": "Claims Pedalwise can simply edit the deployed contract, like updating a normal app."
+        }
+      ],
+      "max_rounds": 5,
+      "jev": {
+        "instructions": "Is the AI's answer fully correct? It must explain that the contract holds the deposit and refunds it automatically based on a return reported by an outside data source (an oracle), and describe a real limitation, such as dependence on that data source or deployed code being hard to change. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "criteria": {
+          "true": "Every claim is correct, the mechanism relies on an outside data source, and a real limitation is described.",
+          "false": "Contains at least one false claim, or leaves out the outside data source or the limitation."
+        }
+      }
+    }
+  ]
+}

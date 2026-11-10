@@ -1,0 +1,5 @@
+# Dev-only extras: the DEV_COSINE comparison panel and the scratchpad
+# experiment scripts. Not needed for deployment.
+-r requirements.txt
+sentence-transformers==6.1.0
+websockets==17.1
