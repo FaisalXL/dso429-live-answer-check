@@ -254,7 +254,7 @@
     <nav class="tabs" id="tabs" aria-label="Questions"></nav>
   </div>
 </div>
-<main id="app"><p class="muted">Loading the assignment…</p></main>
+<main id="app"><p class="muted">Loading…</p></main>
 
 <script>
 const STORAGE_KEY = 'live-answer-lab-v2';
@@ -333,7 +333,7 @@ const hasFeedback = (q) => S.feedback[q.id].trim().length > 0;
 // ---------- websockets ----------
 function setConn(on) {
   document.getElementById('connDot').classList.toggle('on', on);
-  document.getElementById('connText').textContent = on ? 'live scoring on' : 'reconnecting';
+  document.getElementById('connText').textContent = on ? 'live' : 'reconnecting';
 }
 function connectJev() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -351,10 +351,10 @@ function connectJev() {
     if (d.seq < (jevShown[d.question_id] ?? -1)) return; // stale: a newer score is already shown
     jevShown[d.question_id] = d.seq;
     const w = ui[d.question_id];
-    if (d.error) { if (w) w.meter.status(`Scoring is unavailable: ${d.error}.`); return; }
+    if (d.error) { if (w) w.meter.status(`Scoring down: ${d.error}`); return; }
     S.answers[d.question_id].score = d.score;
     saveState();
-    if (w) { w.meter.set(d.score); w.meter.status(`Scored by Jev in ${d.latency_ms} ms`); w.updateHint(); }
+    if (w) { w.meter.set(d.score); w.meter.status(`${d.latency_ms} ms`); w.updateHint(); }
   };
   jevWs.onclose = () => { setConn(false); setTimeout(connectJev, 1000); };
 }
@@ -449,7 +449,7 @@ function renderStrip() {
   const n = A.questions.length;
   const started = A.questions.filter(isStarted).length;
   const fb = A.questions.filter(hasFeedback).length;
-  document.getElementById('progressText').textContent = S.submitted ? 'Submitted' : `${started} of ${n} answered · ${fb} of ${n} feedback`;
+  document.getElementById('progressText').textContent = S.submitted ? 'Submitted' : `${started}/${n} answered · ${fb}/${n} feedback`;
   const tabs = A.questions.map((q, i) => {
     const cls = isStarted(q) && hasFeedback(q) ? 'complete' : isStarted(q) || hasFeedback(q) ? 'started' : '';
     return el('a', { class: `tab ${cls}`, href: `#${q.id}`, 'aria-label': `Question ${i + 1}`, text: String(i + 1) });
@@ -475,13 +475,13 @@ function buildIntro() {
     el('div', {},
       el('div', { class: 'eyebrow', text: A.subtitle }),
       el('h1', { text: A.title }),
-      el('p', { class: 'lede', text: `${A.company_note} Answer every question on this page, then submit at the bottom. Your work saves in this browser as you go.` }),
+      el('p', { class: 'lede', text: `${A.company_note} Your work saves in this browser as you go.` }),
     ),
     el('dl', { class: 'howto' },
-      el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Type your answer. Jev, an AI grader, scores it while you type. If your score stays low, ask for a hint.' })),
-      el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answers with planted mistakes. Tell it what is wrong. It fixes only what you point out, and Jev scores each version.' })),
-      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'After every question, say how it worked for you. Any honest answer earns the credit.' })),
-      el('div', {}, el('dt', { text: 'Grading consent' }), el('dd', { text: 'Before you submit, choose whether Claude Code may help grade your work.' })),
+      el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Jev, an AI grader, scores your answer as you type. Low score? Ask for a hint.' })),
+      el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answer has planted mistakes. Point them out; the AI fixes only what you name.' })),
+      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'Tell us how each question went.' })),
+      el('div', {}, el('dt', { text: 'Grading consent' }), el('dd', { text: 'Choose whether Claude Code may help grade your work.' })),
     ),
     el('div', { class: 'fields' },
       el('div', {}, el('label', { class: 'field', for: 'student-name', text: 'Full name' }), name),
@@ -515,11 +515,11 @@ function fillQuestion(q) {
 
 function liveBody(q) {
   const a = S.answers[q.id];
-  const box = el('textarea', { class: 'ruled', id: `answer-${q.id}`, placeholder: 'Write your answer here…', disabled: locked() });
+  const box = el('textarea', { class: 'ruled', id: `answer-${q.id}`, placeholder: 'Your answer…', disabled: locked() });
   box.value = a.text;
-  const meter = makeMeter({ label: 'Jev score', markAt: A.hint_threshold, markText: `Hints unlock below ${Math.round(A.hint_threshold * 100)}.` });
+  const meter = makeMeter({ label: 'Jev score', markAt: A.hint_threshold, markText: `Hints below ${Math.round(A.hint_threshold * 100)}` });
   meter.set(a.score);
-  meter.status(a.score == null ? 'Start writing to get a score.' : 'Last score');
+  meter.status(a.score == null ? '' : 'Last score');
   const cosine = A.dev_cosine ? el('div', { class: 'dev-line', text: 'dev · cosine similarity —' }) : null;
 
   const hintBtn = el('button', { class: 'btn ghost', type: 'button', text: 'Get a hint' });
@@ -532,11 +532,11 @@ function liveBody(q) {
     hintBtn.disabled = locked() || !(a.score != null && a.score < A.hint_threshold && left > 0);
   };
   hintBtn.addEventListener('click', async () => {
-    hintBtn.disabled = true; hintBtn.textContent = 'Writing a hint…';
+    hintBtn.disabled = true; hintBtn.textContent = 'Thinking…';
     try {
       const d = await api('/api/hint', { session_id: S.sessionId, question_id: q.id, text: a.text });
-      a.hints.push(d.error ? `No hint this time: ${d.detail || d.error}.` : d.hint);
-    } catch (e) { a.hints.push(`No hint this time: ${e.message}.`); }
+      a.hints.push(d.error ? `Hint failed: ${d.detail || d.error}` : d.hint);
+    } catch (e) { a.hints.push(`Hint failed: ${e.message}`); }
     saveState(); drawHints(); hintBtn.textContent = 'Get a hint'; updateHint();
   });
   drawHints(); updateHint();
@@ -563,37 +563,37 @@ function fixBody(q) {
     text.appendChild(isNew ? el('mark', { text: s }) : document.createTextNode(s));
     if (i < all.length - 1) text.appendChild(document.createTextNode(' '));
   });
-  const sheetLabel = !used ? "The AI's answer"
-    : last.changed === false ? `The AI's answer after round ${used} · no changes`
-    : `The AI's answer after round ${used} · changes underlined`;
+  const sheetLabel = !used ? "AI answer"
+    : last.changed === false ? `AI answer · round ${used} · no changes`
+    : `AI answer · round ${used} · changes underlined`;
   const marks = el('span', { class: 'marks' },
     Array.from({ length: q.mistake_count }, (_, i) => el('span', { class: `mark${a.fixed && a.fixed[i] ? ' on' : ''}`, text: '✓' })));
   const sheet = el('div', { class: 'sheet' },
     el('div', { class: 'sheet-head' }, el('span', { class: 'label', style: 'margin:0', text: sheetLabel })),
     text,
     el('div', { class: 'rubric' },
-      el('span', { text: 'Planted mistakes fixed' }), marks,
+      el('span', { text: 'Mistakes fixed' }), marks,
       el('span', { text: a.fixed_count == null ? '' : `${a.fixed_count} of ${q.mistake_count}` })),
   );
 
-  const meter = makeMeter({ label: "Jev score of the AI's answer", markAt: A.pass_threshold, markText: `Solved at ${Math.round(A.pass_threshold * 100)} with every mistake fixed.` });
+  const meter = makeMeter({ label: 'Jev score', markAt: A.pass_threshold, markText: `Solved at ${Math.round(A.pass_threshold * 100)} + all mistakes fixed` });
   meter.set(a.score);
-  meter.status(a.score == null ? '' : used ? `After round ${used}` : "The AI's first answer");
+  meter.status('');
 
   let notice = null;
-  if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(used, 'round')}. The AI's answer is now correct.` });
-  else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'You have used every round. Your rounds are recorded as they are.' });
+  if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(used, 'round')}.` });
+  else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'No rounds left.' });
   else if (a.notice) notice = el('div', { class: 'notice warn', text: a.notice });
 
-  const draft = el('textarea', { class: 'ruled short', id: `critique-${q.id}`, placeholder: 'Name the claim that is wrong and explain why. The AI changes only what you point out.', disabled: locked() || a.solved || outOfRounds });
+  const draft = el('textarea', { class: 'ruled short', id: `critique-${q.id}`, placeholder: 'Which claim is wrong, and why?', disabled: locked() || a.solved || outOfRounds });
   draft.value = a.draft || '';
   const send = el('button', { class: 'btn pen', type: 'button', text: 'Send to the AI' });
   const errorBox = el('div');
   const updateSend = () => { send.disabled = locked() || a.solved || outOfRounds || !draft.value.trim() || a.score == null; };
   draft.addEventListener('input', () => { a.draft = draft.value; saveState(); updateSend(); });
   send.addEventListener('click', async () => {
-    send.disabled = true; draft.disabled = true; send.textContent = 'The AI is revising…';
-    meter.status('Revising, then scoring the new version…');
+    send.disabled = true; draft.disabled = true; send.textContent = 'Revising…';
+    meter.status('');
     try {
       const d = await api('/api/correction/round', { question_id: q.id, current_answer: a.ai_answer, feedback: draft.value.trim() });
       a.rounds.push({
@@ -603,11 +603,11 @@ function fixBody(q) {
       });
       if (d.changed) a.previous_answer = a.ai_answer;
       a.ai_answer = d.revised_answer;
-      a.notice = d.feedback_specific ? null : "The AI made no changes. Your note didn't say which claim is wrong. Name the claim and explain what is wrong with it.";
+      a.notice = d.feedback_specific ? null : 'No changes made. Say which claim is wrong, and why.';
       Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
       saveState(); fillQuestion(q); renderStrip(); fillSubmit();
     } catch (e) {
-      errorBox.replaceChildren(el('div', { class: 'notice err', text: `That round did not go through: ${e.message}. Your note is still here; send it again.` }));
+      errorBox.replaceChildren(el('div', { class: 'notice err', text: `Round failed: ${e.message}. Try again.` }));
       send.textContent = 'Send to the AI'; draft.disabled = false; updateSend(); meter.status('');
     }
   });
@@ -615,22 +615,22 @@ function fixBody(q) {
 
   if (a.score == null && !scoring.has(q.id)) {
     scoring.add(q.id);
-    meter.status("Jev is scoring the AI's first answer…");
+    meter.status('Scoring…');
     api('/api/correction/score', { question_id: q.id, answer: a.ai_answer })
       .then((d) => { Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); fillQuestion(q); })
-      .catch((e) => { meter.status(`Scoring is unavailable: ${e.message}.`); })
+      .catch((e) => { meter.status(`Scoring down: ${e.message}`); })
       .finally(() => scoring.delete(q.id));
   }
 
   const log = a.rounds.length
     ? el('div', {},
-        el('div', { class: 'label', text: 'Your rounds' }),
+        el('div', { class: 'label', text: 'Rounds' }),
         el('ol', { class: 'rounds' }, a.rounds.map((r) => el('li', {},
           el('span', { class: 'n', text: `R${r.round}` }),
           el('span', { text: r.feedback }),
           el('span', { class: 'meta', text: r.feedback_specific === false
-            ? 'No change. The note did not say which claim is wrong.'
-            : `Jev ${points(r.score)}/100 · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
+            ? 'No change: not specific'
+            : `${points(r.score)}/100 · ${r.fixed_count}/${q.mistake_count} fixed` }),
         ))))
     : null;
 
@@ -641,17 +641,17 @@ function fixBody(q) {
     el('div', { class: 'critique' },
       el('label', { class: 'field', style: 'margin:0', for: `critique-${q.id}`, text: "What's wrong with the AI's answer?" }),
       draft, errorBox,
-      el('div', { class: 'row' }, el('span', { class: 'small muted', text: `Round ${Math.min(used + 1, q.max_rounds)} of ${q.max_rounds}` }), send)),
+      el('div', { class: 'row' }, el('span', { class: 'small muted', text: `Round ${Math.min(used + 1, q.max_rounds)}/${q.max_rounds}` }), send)),
     log,
   );
 }
 
 function feedbackBlock(q) {
-  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Was the question clear? Too easy or too hard? Did the score feel fair?', disabled: locked() });
+  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Clear? Too hard? Fair score?', disabled: locked() });
   box.value = S.feedback[q.id];
   box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); renderStrip(); fillSubmit(); });
   return el('div', { class: 'feedback' },
-    el('label', { class: 'field', for: `feedback-${q.id}` }, 'Feedback on this question · ', el('span', { class: 'credit', text: '1 credit' })),
+    el('label', { class: 'field', for: `feedback-${q.id}` }, 'Feedback · ', el('span', { class: 'credit', text: '1 credit' })),
     box,
   );
 }
@@ -663,15 +663,15 @@ function fillSubmit() {
   const missing = A.questions.map((q, i) => ({ q, i })).filter(({ q }) => !hasFeedback(q));
   const named = S.student.name && S.student.id;
   const items = [
-    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : 'Missing, see the top' })),
+    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : 'Missing' })),
     ...A.questions.map((q, i) => {
       const a = S.answers[q.id];
       const work = q.type === 'live'
-        ? (a.text.trim() ? `Answered · last Jev score ${points(a.score)}` : 'Not answered')
-        : (a.solved ? `Solved in ${plural(a.rounds.length, 'round')}` : `${plural(a.rounds.length, 'round')}, not solved`);
+        ? (a.text.trim() ? `${points(a.score)}/100` : 'Not answered')
+        : (a.solved ? `Solved, ${plural(a.rounds.length, 'round')}` : `Not solved, ${plural(a.rounds.length, 'round')}`);
       return el('li', {},
         el('span', {}, el('a', { href: `#${q.id}`, text: `Question ${i + 1}` }), ` · ${work}`),
-        el('span', { class: hasFeedback(q) ? 'yes' : 'no', text: hasFeedback(q) ? 'Feedback done' : 'Feedback missing' }));
+        el('span', { class: hasFeedback(q) ? 'yes' : 'no', text: hasFeedback(q) ? 'Feedback ✓' : 'Feedback missing' }));
     }),
   ];
   const consent = el('input', { type: 'checkbox', id: 'consent' });
@@ -681,7 +681,7 @@ function fillSubmit() {
   submit.disabled = !named || missing.length > 0;
   const errorBox = el('div');
   submit.addEventListener('click', async () => {
-    submit.disabled = true; submit.textContent = 'Submitting and re-scoring every answer…';
+    submit.disabled = true; submit.textContent = 'Submitting…';
     try {
       const answers = {};
       for (const q of A.questions) {
@@ -694,7 +694,7 @@ function fillSubmit() {
       saveState(); renderPage();
       document.getElementById('submit').scrollIntoView({ block: 'start' });
     } catch (e) {
-      errorBox.replaceChildren(el('div', { class: 'notice err', text: `The submission did not go through: ${e.message}. Your answers are still here; try again.` }));
+      errorBox.replaceChildren(el('div', { class: 'notice err', text: `Submit failed: ${e.message}. Try again.` }));
       submit.disabled = false; submit.textContent = 'Submit assignment';
     }
   });
@@ -702,11 +702,11 @@ function fillSubmit() {
     el('h2', { id: 'submit-title', text: 'Submit' }),
     el('ul', { class: 'checklist' }, items),
     el('label', { class: 'consent', for: 'consent' }, consent,
-      el('span', {}, el('strong', { text: 'Claude Code, an AI tool, may help grade this assignment. ' }),
-        'A TA reviews every AI-assisted grade. Leave this unchecked and a TA grades your work by hand.')),
+      el('span', {}, el('strong', { text: 'Claude Code may help grade my work. ' }),
+        'A TA reviews every grade. Unchecked means graded by hand.')),
     errorBox,
     el('div', { class: 'row' },
-      el('span', { class: 'small muted', text: missing.length ? `Add feedback to ${plural(missing.length, 'question')} to submit.` : named ? 'Ready to submit.' : 'Add your name and student ID at the top to submit.' }),
+      el('span', { class: 'small muted', text: missing.length ? `Feedback missing on ${plural(missing.length, 'question')}.` : named ? '' : 'Add your name and ID at the top.' }),
       submit),
   );
 }
@@ -728,9 +728,9 @@ function receipt() {
   });
   return [
     el('h2', { id: 'submit-title', text: 'Submitted' }),
-    el('p', { class: 'muted', style: 'margin:0' }, 'Submission ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
+    el('p', { class: 'muted', style: 'margin:0' }, 'ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
     el('div', { style: 'overflow-x:auto' }, el('table', { class: 'receipt' }, el('tbody', {}, rows))),
-    el('p', { class: 'small muted', style: 'margin:0', text: `The server scored every answer again on submit; these are the recorded scores. Feedback credits: ${d.feedback_credits} of ${A.questions.length}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'allowed' : 'not allowed, graded by hand'}.` }),
+    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${A.questions.length}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.` }),
     el('div', { class: 'row' }, download),
   ];
 }
@@ -740,7 +740,7 @@ async function init() {
   try {
     A = await api('/api/assignment');
   } catch (e) {
-    document.getElementById('app').replaceChildren(el('div', { class: 'notice err', text: `The assignment could not load: ${e.message}. Reload the page to try again.` }));
+    document.getElementById('app').replaceChildren(el('div', { class: 'notice err', text: `Couldn't load: ${e.message}. Reload to try again.` }));
     return;
   }
   S = reconcileState(loadState());
