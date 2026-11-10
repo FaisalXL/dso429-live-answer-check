@@ -2,181 +2,274 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Live Answer Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" />
 <style>
+  /* Layout: one scrolling exam booklet. A sticky strip of question tabs, then
+     numbered questions on ruled answer paper, ending in consent and submit.
+     Blue-book blue is the accent; red is the grader's pen, used for marking. */
   :root {
-    --bg: #0b0f14;
-    --panel: #121822;
-    --panel-2: #0d1420;
-    --border: #1f2937;
-    --text: #e6edf3;
-    --muted: #8b98a5;
-    --accent: #58a6ff;
-    --accent-ink: #06121f;
-    --red: #ff4d5e;
-    --yellow: #ffcb47;
-    --green: #3ddc84;
-    --violet: #b39ddb;
-    --violet-bg: #161026;
-    --violet-border: #3a2a5c;
-    --amber: #e2a94f;
-    --mark: #2b3a1c;
+    --paper: #f4f6f9;
+    --sheet: #ffffff;
+    --ink: #172030;
+    --ink-2: #4a5466;
+    --ink-3: #7b8597;
+    --rule: #dbe2ec;
+    --rule-strong: #bcc7d6;
+    --blue: #1f4fa3;
+    --blue-ink: #ffffff;
+    --blue-soft: #e7eef9;
+    --red: #b5342a;
+    --red-soft: #fbece9;
+    --good: #2b7a4b;
+    --good-soft: #e5f3eb;
+    --warn: #9f620c;
+    --warn-soft: #fbf1df;
+    --font-display: "Literata", Georgia, "Times New Roman", serif;
+    --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --line: 1.75rem;
+    --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+    --gutter-r: max(16px, env(safe-area-inset-right, 0px));
   }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f141c; --sheet: #161d28; --ink: #e5eaf1; --ink-2: #aab4c3; --ink-3: #7c8798;
+      --rule: #253041; --rule-strong: #3a4659;
+      --blue: #8aabea; --blue-ink: #0c1526; --blue-soft: #1a2944;
+      --red: #ef8a7e; --red-soft: #3a1e1b;
+      --good: #6bc893; --good-soft: #13301f; --warn: #e2ab55; --warn-soft: #33260f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f141c; --sheet: #161d28; --ink: #e5eaf1; --ink-2: #aab4c3; --ink-3: #7c8798;
+    --rule: #253041; --rule-strong: #3a4659;
+    --blue: #8aabea; --blue-ink: #0c1526; --blue-soft: #1a2944;
+    --red: #ef8a7e; --red-soft: #3a1e1b;
+    --good: #6bc893; --good-soft: #13301f; --warn: #e2ab55; --warn-soft: #33260f;
+    color-scheme: dark;
+  }
+
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    background: radial-gradient(circle at top, #131a24, var(--bg) 60%) fixed;
-    background-color: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    min-height: 100vh;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 16px/1.55 var(--font-body);
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { width: 100%; max-width: 780px; margin: 0 auto; padding: 0 16px 64px; }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto; z-index: 30;
+    height: env(safe-area-inset-top, 0px); background: var(--paper);
+  }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition: none !important; }
+  }
 
-  .topbar {
-    position: sticky; top: 0; z-index: 10;
-    background: rgba(11, 15, 20, 0.92);
-    backdrop-filter: blur(6px);
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 22px;
+  /* ---------- sticky strip ---------- */
+  .strip {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule-strong);
   }
-  .topbar-inner { max-width: 780px; margin: 0 auto; padding: 12px 16px 10px; }
-  .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .brand { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-  .conn { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
-  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #4a5563; }
-  .conn-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .progress { height: 4px; background: #1a2230; border-radius: 2px; margin-top: 10px; overflow: hidden; }
-  .progress-fill { height: 100%; background: var(--accent); width: 0; transition: width 250ms ease; }
-  .demo-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .chip {
-    font-size: 11px; padding: 4px 9px; border-radius: 999px;
-    border: 1px dashed #5a3a1a; color: var(--amber); background: transparent; cursor: pointer;
+  .strip-inner {
+    max-width: 760px; margin: 0 auto;
+    padding-block: 10px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
   }
-  .chip.active { background: #2a1d0e; }
+  .brand { font: 500 13px/1 var(--font-mono); letter-spacing: 0.04em; color: var(--ink); white-space: nowrap; }
+  .progress-text { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+  .conn-dot.on { background: var(--good); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .tab {
+    min-width: 32px; height: 32px; padding: 0 8px;
+    display: inline-grid; place-items: center;
+    border: 1px solid var(--rule-strong); border-radius: 6px;
+    font: 500 13px/1 var(--font-mono); color: var(--ink-2);
+    text-decoration: none; background: var(--sheet);
+  }
+  .tab.started { border-color: var(--blue); color: var(--blue); }
+  .tab.complete { background: var(--blue); border-color: var(--blue); color: var(--blue-ink); }
+  .tab-reset { border-style: dashed; border-color: var(--warn); color: var(--warn); background: transparent; cursor: pointer; }
 
-  h1 { font-size: 22px; margin: 0 0 6px; }
-  h2 { font-size: 18px; margin: 0 0 4px; }
-  .muted { color: var(--muted); }
-  .small { font-size: 12px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 20px 22px;
-    margin-bottom: 16px;
+  /* ---------- page ---------- */
+  main {
+    max-width: 760px; margin: 0 auto;
+    padding-block: 48px 120px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+    display: grid; gap: 64px;
   }
-  .qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .badge {
-    font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted);
+  .eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); }
+  h1 { font: 600 clamp(2.1rem, 6vw, 2.9rem)/1.08 var(--font-display); letter-spacing: -0.015em; margin: 10px 0 14px; text-wrap: balance; }
+  .lede { color: var(--ink-2); max-width: 62ch; margin: 0; }
+  .intro { display: grid; gap: 28px; }
+  .howto {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px;
+    margin: 0; padding-top: 24px; border-top: 1px solid var(--rule);
   }
-  .badge.live { color: var(--green); border-color: #1d4a33; }
-  .badge.correction { color: var(--violet); border-color: var(--violet-border); }
-  .prompt { font-size: 16px; line-height: 1.55; }
-
-  label.field { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; letter-spacing: 0.04em; text-transform: uppercase; }
-  input[type=text], textarea {
-    width: 100%;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.5;
-    padding: 12px 14px;
-    font-family: inherit;
+  .howto div { min-width: 0; }
+  .howto dt { font-weight: 600; }
+  .howto dd { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; }
+  .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 600px) {
+    .howto, .fields { grid-template-columns: 1fr; }
   }
-  textarea { min-height: 150px; resize: vertical; }
-  textarea.short { min-height: 90px; }
-  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .label, label.field {
+    display: block; margin-bottom: 8px;
+    font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
+  }
+  input[type=text] {
+    width: 100%; font: inherit; color: var(--ink);
+    background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 10px 12px;
+  }
+  textarea {
+    display: block; width: 100%; min-height: 9rem; resize: vertical;
+    font: 400 1rem/1.6 var(--font-body); color: var(--ink);
+    background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 12px 14px;
+  }
+  /* Exam paper: rules sit under every line of writing and scroll with the text. */
+  textarea.ruled {
+    min-height: calc(var(--line) * 7);
+    line-height: var(--line);
+    padding: calc(var(--line) / 2) 16px 0;
+    background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px), var(--rule) var(--line));
+    background-position: 0 calc(var(--line) / 2);
+    background-attachment: local;
+  }
+  textarea.short { min-height: 5.5rem; }
+  textarea:disabled, input:disabled { opacity: 0.7; }
 
   .btn {
-    background: var(--accent); color: var(--accent-ink);
-    border: none; border-radius: 8px; padding: 10px 16px;
-    font-weight: 600; font-size: 14px; cursor: pointer;
+    font: 600 14px/1 var(--font-body); padding: 11px 18px; border-radius: 6px; cursor: pointer;
+    background: var(--blue); color: var(--blue-ink); border: 1px solid var(--blue);
   }
-  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .btn.violet { background: var(--violet); color: #1a0f2e; }
-  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .nav-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+  .btn.pen { background: var(--red); border-color: var(--red); color: var(--sheet); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13px; }
 
-  .meter-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .meter-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .score-num { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; }
-  .pixel-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; margin: 12px 0 6px; }
-  .pixel { aspect-ratio: 1 / 1; border-radius: 3px; background: #1a2230; transition: background-color 220ms ease, box-shadow 220ms ease; }
-  .meter-status { font-size: 11px; color: var(--muted); min-height: 15px; }
+  /* ---------- question ---------- */
+  .q { display: grid; gap: 24px; padding-top: 48px; border-top: 1px solid var(--rule-strong); scroll-margin-top: 72px; }
+  .q-head { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: start; }
+  .q-num { font: 600 3.2rem/0.85 var(--font-display); color: var(--blue); font-variant-numeric: lining-nums; }
+  .q-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 12px/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+  .q-meta .type { color: var(--blue); }
+  .q-meta .type.fix { color: var(--red); }
+  .q h2 { font: 600 1.55rem/1.2 var(--font-display); margin: 6px 0 0; text-wrap: balance; }
+  .prompt { font: 400 1.12rem/1.65 var(--font-display); margin: 0; max-width: 65ch; }
 
-  .hint-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .hint-list { margin: 12px 0 0; padding: 0; list-style: none; }
-  .hint-list li {
-    margin-top: 8px; padding: 10px 12px; border-radius: 10px;
-    background: #10202a; border: 1px solid #1e3a4a; color: #bfe6ff; font-size: 14px; line-height: 1.5;
+  /* ---------- score scale ---------- */
+  .meter { display: grid; gap: 8px; }
+  .meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .meter-value { font: 500 1.9rem/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
+  .meter-value small { font-size: 0.85rem; color: var(--ink-3); margin-left: 3px; }
+  .meter-track { position: relative; height: 10px; border-radius: 5px; background: var(--rule); }
+  .meter-fill {
+    position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 5px; background: var(--ink-3);
+    transition: width 260ms ease, background-color 260ms ease;
   }
+  .meter-marker { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--ink); }
+  .meter-scale { position: relative; height: 14px; font: 400 11px/1 var(--font-mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .meter-scale span { position: absolute; top: 0; transform: translateX(-50%); }
+  .meter-scale span:first-child { transform: none; }
+  .meter-scale span:last-child { transform: translateX(-100%); }
+  .meter-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
+  .meter-status { color: var(--ink-3); }
+  .meter[data-tone=low] .meter-fill { background: var(--red); }
+  .meter[data-tone=low] .meter-value { color: var(--red); }
+  .meter[data-tone=mid] .meter-fill { background: var(--warn); }
+  .meter[data-tone=mid] .meter-value { color: var(--warn); }
+  .meter[data-tone=high] .meter-fill { background: var(--good); }
+  .meter[data-tone=high] .meter-value { color: var(--good); }
 
-  .ai-card { background: var(--violet-bg); border-color: var(--violet-border); }
-  .ai-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--violet); margin-bottom: 8px; }
-  .ai-text { font-size: 15px; line-height: 1.6; }
-  .ai-text mark { background: var(--mark); color: #d8f5b8; border-radius: 3px; padding: 0 2px; }
-  .mistakes { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
-  .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #4a5563; }
-  .dot.fixed { background: var(--green); border-color: var(--green); box-shadow: 0 0 6px var(--green); }
-  .banner { padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 14px; }
-  .banner.ok { background: #0f2a1c; border: 1px solid #1d5a3a; color: #b8f5d0; }
-  .banner.warn { background: #2a1d0e; border: 1px solid #5a3a1a; color: #f0d9b5; }
-  .banner.err { background: #2a0f14; border: 1px solid #5a1d26; color: #ffc2c8; }
-  .rounds { margin: 0; padding: 0; list-style: none; }
-  .rounds li { border-top: 1px solid var(--border); padding: 10px 0; font-size: 13px; line-height: 1.5; }
-  .rounds li:first-child { border-top: none; }
-  .round-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .hints { display: grid; gap: 10px; }
+  .hint-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .hint-list li { padding: 10px 14px; border-radius: 6px; background: var(--blue-soft); font-size: 15px; }
 
-  .feedback-card { border-style: dashed; }
-  .review-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
-  .review-row:first-child { border-top: none; }
-  .ok-text { color: var(--green); }
-  .warn-text { color: var(--amber); }
-  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; }
-  .consent input { margin-top: 4px; width: 18px; height: 18px; }
-
-  details.reveal { margin-top: 12px; border: 1px dashed #5a3a1a; border-radius: 10px; padding: 8px 12px; }
-  details.reveal summary { cursor: pointer; font-size: 12px; color: var(--amber); letter-spacing: 0.04em; text-transform: uppercase; }
-  details.reveal p { font-size: 13px; line-height: 1.5; color: #f0d9b5; }
-  .dev-line { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  ul.howto { padding-left: 18px; line-height: 1.6; font-size: 14px; }
-  @media (max-width: 520px) {
-    .pixel-grid { gap: 2px; }
-    .card { padding: 16px; }
+  /* ---------- fix-the-AI ---------- */
+  .sheet { background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 20px 22px; }
+  .sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-bottom: 14px; }
+  .ai-text { font: 400 1.06rem/1.72 var(--font-display); }
+  .ai-text mark { background: var(--blue-soft); color: inherit; box-shadow: inset 0 -2px 0 var(--blue); padding: 0 1px; }
+  .rubric {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--rule-strong);
+    font-size: 14px; color: var(--ink-2);
   }
+  .marks { display: inline-flex; gap: 6px; }
+  .mark {
+    width: 18px; height: 18px; border-radius: 3px; border: 1.5px solid var(--rule-strong);
+    display: inline-grid; place-items: center; font: 600 12px/1 var(--font-body); color: transparent;
+  }
+  .mark.on { border-color: var(--good); background: var(--good); color: var(--sheet); }
+  .notice { padding: 12px 14px; border-radius: 6px; font-size: 15px; border: 1px solid; }
+  .notice.ok { background: var(--good-soft); border-color: var(--good); }
+  .notice.warn { background: var(--warn-soft); border-color: var(--warn); }
+  .notice.err { background: var(--red-soft); border-color: var(--red); }
+  .critique { display: grid; gap: 10px; }
+  .rounds { margin: 0; padding: 0; list-style: none; display: grid; }
+  .rounds li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; padding: 12px 0; border-top: 1px solid var(--rule); font-size: 15px; }
+  .rounds .n { font: 500 13px/1.6 var(--font-mono); color: var(--ink-3); grid-row: span 2; }
+  .rounds .meta { font-size: 13px; color: var(--ink-2); }
+
+  .feedback { display: grid; gap: 4px; padding: 18px 20px; border: 1px dashed var(--rule-strong); border-radius: 6px; }
+  .feedback .credit { color: var(--blue); }
+
+  details.key { border: 1px dashed var(--warn); border-radius: 6px; padding: 10px 14px; }
+  details.key summary { cursor: pointer; font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--warn); }
+  details.key p { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+  .dev-line { font: 400 12px/1.4 var(--font-mono); color: var(--ink-3); }
+
+  /* ---------- submit ---------- */
+  .submit { display: grid; gap: 22px; padding-top: 48px; border-top: 2px solid var(--ink); scroll-margin-top: 72px; }
+  .submit h2 { font: 600 1.8rem/1.15 var(--font-display); margin: 0; }
+  .checklist { list-style: none; margin: 0; padding: 0; display: grid; }
+  .checklist li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); font-size: 15px; }
+  .checklist .yes { color: var(--good); white-space: nowrap; }
+  .checklist .no { color: var(--warn); white-space: nowrap; }
+  .consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px 18px; background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; font-size: 15px; }
+  .consent input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--blue); }
+  .receipt td { padding: 9px 0; border-top: 1px solid var(--rule); font-size: 15px; vertical-align: top; }
+  .receipt td:last-child { text-align: right; color: var(--ink-2); padding-left: 16px; font-variant-numeric: tabular-nums; }
+  .receipt { width: 100%; border-collapse: collapse; }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="topbar-row">
-      <div class="brand" id="brand">Live Answer Lab</div>
-      <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">connecting</span></div>
-    </div>
-    <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
-    <div class="demo-nav" id="demoNav" hidden></div>
+<div class="strip">
+  <div class="strip-inner">
+    <div class="brand" id="brand">DSO 429 · Live Answer Lab</div>
+    <span class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">connecting</span></span>
+    <span class="progress-text" id="progressText"></span>
+    <nav class="tabs" id="tabs" aria-label="Questions"></nav>
   </div>
 </div>
-<div class="wrap" id="app"><div class="card muted">Loading…</div></div>
+<main id="app"><p class="muted">Loading the assignment…</p></main>
 
 <script>
-const STORAGE_KEY = 'live-answer-lab-v1';
+const STORAGE_KEY = 'live-answer-lab-v2';
 const JEV_THROTTLE_MS = 500;
-const PIXELS = 24;
 
-let A = null;          // assignment config from the server
-let S = null;          // student state, saved to localStorage
-let reveal = null;     // demo-mode answer key, fetched on demand
-let liveUi = null;     // handles for the live question on screen
+let A = null;            // assignment config from the server
+let S = null;            // student state, saved to localStorage
+let reveal = null;       // demo-mode answer key, fetched on demand
+const ui = {};           // question id -> live widgets on screen
+const sections = {};     // question id -> its <section>
+const scoring = new Set(); // fix-the-AI questions whose first score is pending
 let jevWs = null, jevSeq = 0;
-const jevShown = {};   // question id -> newest seq displayed
+const jevShown = {};     // question id -> newest seq displayed
+const jevTimers = {}, jevLastSent = {};
 let cosineWs = null;
-let jevTimer = null, jevLastSent = 0;
 
 // ---------- helpers ----------
 function el(tag, attrs = {}, ...children) {
@@ -194,12 +287,8 @@ function el(tag, attrs = {}, ...children) {
   }
   return node;
 }
-function pct(score) { return score == null ? '—' : Math.round(score * 100) + '%'; }
-function lerp(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
-function colorFor(s) {
-  const c = s < 0.5 ? lerp([255, 77, 94], [255, 203, 71], s / 0.5) : lerp([255, 203, 71], [61, 220, 132], (s - 0.5) / 0.5);
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
+const points = (score) => (score == null ? '—' : String(Math.round(score * 100)));
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { return null; } }
 async function api(path, body) {
@@ -214,394 +303,385 @@ async function api(path, body) {
   return data;
 }
 function splitSentences(text) { return (text || '').split(/(?<=[.!?])\s+/).filter(Boolean); }
+const locked = () => !!S.submitted;
 
 // ---------- state ----------
 function freshAnswer(q) {
   return q.type === 'live'
     ? { text: '', score: null, hints: [] }
-    : { ai_answer: q.seed_answer, previous_answer: null, score: null, fixed: null, fixed_count: null, solved: false, rounds: [], draft: '' };
+    : { ai_answer: q.seed_answer, previous_answer: null, score: null, fixed: null, fixed_count: null, solved: false, rounds: [], draft: '', notice: null };
 }
 function freshState() {
   const answers = {}, feedback = {};
   for (const q of A.questions) { answers[q.id] = freshAnswer(q); feedback[q.id] = ''; }
-  return {
-    version: 1, sessionId: A.session_id, startedAt: new Date().toISOString(),
-    view: 'intro', student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null,
-  };
+  return { version: 2, sessionId: A.session_id, startedAt: new Date().toISOString(), student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null };
 }
 function reconcileState(saved) {
-  if (!saved || saved.version !== 1) return freshState();
+  if (!saved || saved.version !== 2) return freshState();
   for (const q of A.questions) {
     if (!saved.answers[q.id]) saved.answers[q.id] = freshAnswer(q);
     if (saved.feedback[q.id] == null) saved.feedback[q.id] = '';
   }
-  const n = A.questions.length;
-  if (typeof saved.view === 'number' && saved.view >= n) saved.view = 'review';
   return saved;
 }
+function isStarted(q) {
+  const a = S.answers[q.id];
+  return q.type === 'live' ? a.text.trim().length > 0 : a.rounds.length > 0;
+}
+const hasFeedback = (q) => S.feedback[q.id].trim().length > 0;
 
 // ---------- websockets ----------
 function setConn(on) {
   document.getElementById('connDot').classList.toggle('on', on);
-  document.getElementById('connText').textContent = on ? 'live' : 'reconnecting';
+  document.getElementById('connText').textContent = on ? 'live scoring on' : 'reconnecting';
 }
 function connectJev() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   jevWs = new WebSocket(`${proto}://${location.host}/ws/jev`);
   jevWs.onopen = () => {
     setConn(true);
-    if (liveUi && S.answers[liveUi.qid].text.trim()) sendJev(liveUi.qid);
+    for (const q of A.questions) {
+      const a = S.answers[q.id];
+      if (q.type === 'live' && a.text.trim() && a.score == null && !locked()) sendJev(q.id);
+    }
   };
   jevWs.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
     if (d.type !== 'jev') return;
     if (d.seq < (jevShown[d.question_id] ?? -1)) return; // stale: a newer score is already shown
     jevShown[d.question_id] = d.seq;
-    const onScreen = liveUi && liveUi.qid === d.question_id;
-    if (d.error) { if (onScreen) liveUi.meter.status(`Scoring unavailable: ${d.error}`); return; }
+    const w = ui[d.question_id];
+    if (d.error) { if (w) w.meter.status(`Scoring is unavailable: ${d.error}.`); return; }
     S.answers[d.question_id].score = d.score;
     saveState();
-    if (onScreen) {
-      liveUi.meter.set(d.score);
-      liveUi.meter.status(`scored by Jev · ${d.latency_ms} ms`);
-      liveUi.updateHint();
-    }
+    if (w) { w.meter.set(d.score); w.meter.status(`Scored by Jev in ${d.latency_ms} ms`); w.updateHint(); }
   };
   jevWs.onclose = () => { setConn(false); setTimeout(connectJev, 1000); };
 }
 function sendJev(qid) {
-  jevLastSent = Date.now();
+  jevLastSent[qid] = Date.now();
   if (!jevWs || jevWs.readyState !== WebSocket.OPEN) return;
   jevSeq++;
   jevWs.send(JSON.stringify({ question_id: qid, text: S.answers[qid].text, seq: jevSeq }));
-  if (liveUi && liveUi.qid === qid) liveUi.meter.status('checking…');
+  if (ui[qid]) ui[qid].meter.status('Scoring…');
   if (cosineWs && cosineWs.readyState === WebSocket.OPEN) {
     cosineWs.send(JSON.stringify({ question_id: qid, text: S.answers[qid].text }));
   }
 }
 function scheduleJev(qid) {
-  clearTimeout(jevTimer);
-  const wait = JEV_THROTTLE_MS - (Date.now() - jevLastSent);
-  if (wait <= 0) sendJev(qid); else jevTimer = setTimeout(() => sendJev(qid), wait);
+  clearTimeout(jevTimers[qid]);
+  const wait = JEV_THROTTLE_MS - (Date.now() - (jevLastSent[qid] || 0));
+  if (wait <= 0) sendJev(qid); else jevTimers[qid] = setTimeout(() => sendJev(qid), wait);
 }
 function connectCosine() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   cosineWs = new WebSocket(`${proto}://${location.host}/ws/cosine`);
   cosineWs.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
-    if (liveUi && liveUi.qid === d.question_id && liveUi.cosine) {
-      liveUi.cosine.textContent = `dev · cosine similarity: ${pct(d.score)}`;
-    }
+    if (ui[d.question_id] && ui[d.question_id].cosine) ui[d.question_id].cosine.textContent = `dev · cosine similarity ${points(d.score)}/100`;
   };
   cosineWs.onclose = () => setTimeout(connectCosine, 2000);
 }
 
-// ---------- shared components ----------
-function makeMeter(label) {
-  const num = el('div', { class: 'score-num', text: '—' });
-  const grid = el('div', { class: 'pixel-grid' });
-  const pixels = Array.from({ length: PIXELS }, () => grid.appendChild(el('div', { class: 'pixel' })));
-  const status = el('div', { class: 'meter-status', text: ' ' });
-  const root = el('div', {}, el('div', { class: 'meter-row' }, el('div', { class: 'meter-label', text: label }), num), grid, status);
-  let shown = 0, raf = null;
-  function paint(score) {
-    const lit = Math.round(score * PIXELS), color = colorFor(score);
-    pixels.forEach((p, i) => {
-      p.style.background = i < lit ? color : '';
-      p.style.boxShadow = i < lit ? `0 0 8px ${color}` : '';
-    });
-  }
+// ---------- shared pieces ----------
+function makeMeter({ label, markAt, markText }) {
+  const value = el('div', { class: 'meter-value' }, el('span', { text: '—' }), el('small', { text: '/100' }));
+  const fill = el('div', { class: 'meter-fill' });
+  const track = el('div', { class: 'meter-track', role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': label },
+    fill, el('div', { class: 'meter-marker', style: `left:${markAt * 100}%` }));
+  const scale = el('div', { class: 'meter-scale', 'aria-hidden': 'true' },
+    [0, 25, 50, 75, 100].map((n) => el('span', { style: `left:${n}%`, text: String(n) })));
+  const status = el('span', { class: 'meter-status', text: '' });
+  const root = el('div', { class: 'meter', 'data-tone': 'none' },
+    el('div', { class: 'meter-top' }, el('span', { class: 'label', style: 'margin:0', text: label }), value),
+    track, scale,
+    el('div', { class: 'meter-foot' }, el('span', { text: markText }), status));
   return {
     root,
     set(score) {
-      cancelAnimationFrame(raf);
-      if (score == null) { num.textContent = '—'; num.style.color = ''; paint(0); return; }
-      const start = shown, t0 = performance.now();
-      const step = (now) => {
-        const t = Math.min(1, (now - t0) / 180);
-        shown = start + (score - start) * t;
-        num.textContent = Math.round(shown * 100) + '%';
-        num.style.color = colorFor(shown);
-        if (t < 1) raf = requestAnimationFrame(step);
-      };
-      raf = requestAnimationFrame(step);
-      paint(score);
+      const n = score == null ? null : Math.round(score * 100);
+      value.firstChild.textContent = n == null ? '—' : String(n);
+      fill.style.width = `${n ?? 0}%`;
+      track.setAttribute('aria-valuenow', n ?? 0);
+      root.dataset.tone = score == null ? 'none' : score < A.hint_threshold ? 'low' : score < A.pass_threshold ? 'mid' : 'high';
     },
     status(text) { status.textContent = text; },
   };
 }
-function revealBox(q) {
+function answerKey(q) {
   if (!A.demo_mode) return null;
-  const body = el('div', {}, el('p', { class: 'muted', text: 'Loading…' }));
-  const box = el('details', { class: 'reveal' }, el('summary', { text: 'Reveal answer key (demo only)' }), body);
+  const body = el('div', {}, el('p', { text: 'Loading…' }));
+  const box = el('details', { class: 'key' }, el('summary', { text: 'Answer key · demo only' }), body);
   box.addEventListener('toggle', async () => {
     if (!box.open) return;
     try {
       reveal = reveal || await api('/api/reveal');
       const r = reveal[q.id];
       body.replaceChildren(
-        el('p', {}, el('strong', { text: 'Reference: ' }), r.reference_answer),
-        r.mistakes.length ? el('p', {}, el('strong', { text: 'Planted mistakes: ' }), r.mistakes.map((m, i) => `(${i + 1}) ${m} `)) : null,
+        el('p', {}, el('strong', { text: 'Reference answer. ' }), r.reference_answer),
+        r.mistakes.length ? el('p', {}, el('strong', { text: 'Planted mistakes. ' }), r.mistakes.map((m, i) => `(${i + 1}) ${m} `)) : null,
       );
-    } catch (e) { body.replaceChildren(el('p', { text: `Unavailable: ${e.message}` })); }
+    } catch (e) { body.replaceChildren(el('p', { text: `The answer key could not load: ${e.message}` })); }
   });
   return box;
 }
 
-// ---------- views ----------
-function render() {
-  liveUi = null;
+// ---------- page ----------
+function renderPage() {
+  for (const k of Object.keys(ui)) delete ui[k];
   const app = document.getElementById('app');
-  app.replaceChildren();
-  renderChrome();
-  if (S.view === 'intro') app.appendChild(viewIntro());
-  else if (S.view === 'review') app.appendChild(viewReview());
-  else if (S.view === 'done') app.appendChild(viewDone());
-  else app.appendChild(viewQuestion(S.view));
-  window.scrollTo({ top: 0 });
-}
-
-function renderChrome() {
-  document.getElementById('brand').textContent = A.title;
-  document.title = A.title;
-  const done = A.questions.filter((q) => S.feedback[q.id].trim()).length;
-  const frac = S.view === 'done' ? 1 : done / A.questions.length;
-  document.getElementById('progressFill').style.width = `${Math.round(frac * 100)}%`;
-  const nav = document.getElementById('demoNav');
-  nav.hidden = !A.demo_mode;
-  if (!A.demo_mode) return;
-  const go = (view) => () => { S.view = view; saveState(); render(); };
-  nav.replaceChildren(
-    el('button', { class: `chip${S.view === 'intro' ? ' active' : ''}`, text: 'Intro', onclick: go('intro') }),
-    ...A.questions.map((q, i) => el('button', { class: `chip${S.view === i ? ' active' : ''}`, text: `Q${i + 1} ${q.type === 'live' ? '·live' : '·AI fix'}`, onclick: go(i) })),
-    el('button', { class: `chip${S.view === 'review' ? ' active' : ''}`, text: 'Review', onclick: go('review') }),
-    el('button', { class: 'chip', text: 'Reset (demo)', onclick: () => { if (confirm('Clear all answers and start over?')) { S = freshState(); saveState(); render(); } } }),
+  app.replaceChildren(
+    buildIntro(),
+    ...A.questions.map((q) => {
+      const s = el('section', { class: 'q', id: q.id, 'aria-labelledby': `${q.id}-title` });
+      sections[q.id] = s;
+      fillQuestion(q);
+      return s;
+    }),
+    (() => { const s = el('section', { class: 'submit', id: 'submit', 'aria-labelledby': 'submit-title' }); sections.submit = s; fillSubmit(); return s; })(),
   );
+  renderStrip();
 }
 
-function viewIntro() {
-  const name = el('input', { type: 'text', id: 'name', autocomplete: 'name', value: S.student.name });
-  const sid = el('input', { type: 'text', id: 'sid', value: S.student.id });
-  const start = el('button', { class: 'btn', text: S.student.name ? 'Continue' : 'Start' });
-  const check = () => { start.disabled = !(name.value.trim() && sid.value.trim()); };
-  name.addEventListener('input', check); sid.addEventListener('input', check); check();
-  start.addEventListener('click', () => {
-    S.student = { name: name.value.trim(), id: sid.value.trim() };
-    if (S.view === 'intro') S.view = 0;
-    saveState(); render();
+function renderStrip() {
+  document.getElementById('brand').textContent = `DSO 429 · ${A.title}`;
+  document.title = A.title;
+  const n = A.questions.length;
+  const started = A.questions.filter(isStarted).length;
+  const fb = A.questions.filter(hasFeedback).length;
+  document.getElementById('progressText').textContent = S.submitted ? 'Submitted' : `${started} of ${n} answered · ${fb} of ${n} feedback`;
+  const tabs = A.questions.map((q, i) => {
+    const cls = isStarted(q) && hasFeedback(q) ? 'complete' : isStarted(q) || hasFeedback(q) ? 'started' : '';
+    return el('a', { class: `tab ${cls}`, href: `#${q.id}`, 'aria-label': `Question ${i + 1}`, text: String(i + 1) });
   });
+  tabs.push(el('a', { class: 'tab', href: '#submit', text: 'Submit' }));
+  if (A.demo_mode) {
+    tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Reset demo', onclick: () => {
+      if (!confirm('Clear every answer and start over?')) return;
+      S = freshState(); saveState(); renderPage(); window.scrollTo({ top: 0 });
+    } }));
+  }
+  document.getElementById('tabs').replaceChildren(...tabs);
+}
+
+function buildIntro() {
+  const name = el('input', { type: 'text', id: 'student-name', autocomplete: 'name', value: S.student.name, disabled: locked() });
+  const sid = el('input', { type: 'text', id: 'student-id', value: S.student.id, disabled: locked() });
+  const onEdit = () => { S.student = { name: name.value.trim(), id: sid.value.trim() }; saveState(); fillSubmit(); };
+  name.addEventListener('input', onEdit); sid.addEventListener('input', onEdit);
   const live = A.questions.filter((q) => q.type === 'live').length;
   const fix = A.questions.length - live;
-  return el('div', {},
-    el('div', { class: 'card' },
+  return el('section', { class: 'intro' },
+    el('div', {},
+      el('div', { class: 'eyebrow', text: A.subtitle }),
       el('h1', { text: A.title }),
-      el('div', { class: 'muted', text: A.subtitle }),
-      A.company_note ? el('p', { class: 'small muted', text: A.company_note }) : null,
-      el('ul', { class: 'howto' },
-        el('li', {}, el('strong', { text: `${live} live questions. ` }), 'Type your answer. An AI grader (Jev) scores how correct it is while you type. If your score is low, you can ask for a hint.'),
-        el('li', {}, el('strong', { text: `${fix} fix-the-AI questions. ` }), 'An AI answers the question with some mistakes. Point out what is wrong. The AI fixes only what you point out, and Jev scores each new version. Keep going until the answer is correct.'),
-        el('li', {}, el('strong', { text: 'Question feedback, 1 credit each. ' }), 'After every question, say how the question worked for you. Any honest answer earns the credit.'),
-        el('li', {}, el('strong', { text: 'Grading consent. ' }), 'At the end you choose whether Claude Code may help grade your work.'),
-      ),
-      el('label', { class: 'field', for: 'name', text: 'Full name' }), name,
-      el('label', { class: 'field', for: 'sid', text: 'Student ID' }), sid,
-      el('div', { class: 'nav-row', style: 'margin-top:16px' }, el('span'), start),
+      el('p', { class: 'lede', text: `${A.company_note} Answer every question on this page, then submit at the bottom. Your work saves in this browser as you go.` }),
+    ),
+    el('dl', { class: 'howto' },
+      el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Type your answer. Jev, an AI grader, scores it while you type. If your score stays low, ask for a hint.' })),
+      el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answers with planted mistakes. Tell it what is wrong. It fixes only what you point out, and Jev scores each version.' })),
+      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'After every question, say how it worked for you. Any honest answer earns the credit.' })),
+      el('div', {}, el('dt', { text: 'Grading consent' }), el('dd', { text: 'Before you submit, choose whether Claude Code may help grade your work.' })),
+    ),
+    el('div', { class: 'fields' },
+      el('div', {}, el('label', { class: 'field', for: 'student-name', text: 'Full name' }), name),
+      el('div', {}, el('label', { class: 'field', for: 'student-id', text: 'Student ID' }), sid),
     ),
   );
 }
 
-function questionFeedbackCard(q, onChange) {
-  const box = el('textarea', { class: 'short', id: `fb-${q.id}`, placeholder: 'Was the question clear? Was it too easy or too hard? Did the live score feel fair?' });
+function fillQuestion(q) {
+  const i = A.questions.indexOf(q);
+  delete ui[q.id];
+  const head = el('header', { class: 'q-head' },
+    el('div', { class: 'q-num', 'aria-hidden': 'true', text: String(i + 1) }),
+    el('div', {},
+      el('div', { class: 'q-meta' },
+        el('span', { text: `Question ${i + 1} of ${A.questions.length}` }),
+        el('span', { text: q.topic }),
+        el('span', { class: q.type === 'live' ? 'type' : 'type fix', text: q.type === 'live' ? 'Live answer' : 'Fix the AI' }),
+      ),
+      el('h2', { id: `${q.id}-title`, text: q.title }),
+    ),
+  );
+  sections[q.id].replaceChildren(
+    head,
+    el('p', { class: 'prompt', text: q.prompt }),
+    answerKey(q),
+    q.type === 'live' ? liveBody(q) : fixBody(q),
+    feedbackBlock(q),
+  );
+}
+
+function liveBody(q) {
+  const a = S.answers[q.id];
+  const box = el('textarea', { class: 'ruled', id: `answer-${q.id}`, placeholder: 'Write your answer here…', disabled: locked() });
+  box.value = a.text;
+  const meter = makeMeter({ label: 'Jev score', markAt: A.hint_threshold, markText: `Hints unlock below ${Math.round(A.hint_threshold * 100)}.` });
+  meter.set(a.score);
+  meter.status(a.score == null ? 'Start writing to get a score.' : 'Last score');
+  const cosine = A.dev_cosine ? el('div', { class: 'dev-line', text: 'dev · cosine similarity —' }) : null;
+
+  const hintBtn = el('button', { class: 'btn ghost', type: 'button', text: 'Get a hint' });
+  const hintCount = el('span', { class: 'small muted' });
+  const hintList = el('ul', { class: 'hint-list' });
+  const drawHints = () => hintList.replaceChildren(...a.hints.map((h) => el('li', { text: h })));
+  const updateHint = () => {
+    const left = A.max_hints - a.hints.length;
+    hintCount.textContent = `${plural(left, 'hint')} left`;
+    hintBtn.disabled = locked() || !(a.score != null && a.score < A.hint_threshold && left > 0);
+  };
+  hintBtn.addEventListener('click', async () => {
+    hintBtn.disabled = true; hintBtn.textContent = 'Writing a hint…';
+    try {
+      const d = await api('/api/hint', { session_id: S.sessionId, question_id: q.id, text: a.text });
+      a.hints.push(d.error ? `No hint this time: ${d.detail || d.error}.` : d.hint);
+    } catch (e) { a.hints.push(`No hint this time: ${e.message}.`); }
+    saveState(); drawHints(); hintBtn.textContent = 'Get a hint'; updateHint();
+  });
+  drawHints(); updateHint();
+
+  box.addEventListener('input', () => { a.text = box.value; saveState(); scheduleJev(q.id); renderStrip(); fillSubmit(); });
+  ui[q.id] = { meter, updateHint, cosine };
+
+  return el('div', { style: 'display:grid;gap:22px' },
+    el('div', {}, el('label', { class: 'field', for: `answer-${q.id}`, text: 'Your answer' }), box),
+    meter.root, cosine,
+    el('div', { class: 'hints' }, el('div', { class: 'row' }, hintBtn, hintCount), hintList),
+  );
+}
+
+function fixBody(q) {
+  const a = S.answers[q.id];
+  const used = a.rounds.length;
+  const outOfRounds = used >= q.max_rounds;
+  const last = a.rounds[used - 1];
+
+  const text = el('div', { class: 'ai-text' });
+  splitSentences(a.ai_answer).forEach((s, i, all) => {
+    const isNew = a.previous_answer != null && last && last.changed !== false && !splitSentences(a.previous_answer).includes(s);
+    text.appendChild(isNew ? el('mark', { text: s }) : document.createTextNode(s));
+    if (i < all.length - 1) text.appendChild(document.createTextNode(' '));
+  });
+  const sheetLabel = !used ? "The AI's answer"
+    : last.changed === false ? `The AI's answer after round ${used} · no changes`
+    : `The AI's answer after round ${used} · changes underlined`;
+  const marks = el('span', { class: 'marks' },
+    Array.from({ length: q.mistake_count }, (_, i) => el('span', { class: `mark${a.fixed && a.fixed[i] ? ' on' : ''}`, text: '✓' })));
+  const sheet = el('div', { class: 'sheet' },
+    el('div', { class: 'sheet-head' }, el('span', { class: 'label', style: 'margin:0', text: sheetLabel })),
+    text,
+    el('div', { class: 'rubric' },
+      el('span', { text: 'Planted mistakes fixed' }), marks,
+      el('span', { text: a.fixed_count == null ? '' : `${a.fixed_count} of ${q.mistake_count}` })),
+  );
+
+  const meter = makeMeter({ label: "Jev score of the AI's answer", markAt: A.pass_threshold, markText: `Solved at ${Math.round(A.pass_threshold * 100)} with every mistake fixed.` });
+  meter.set(a.score);
+  meter.status(a.score == null ? '' : used ? `After round ${used}` : "The AI's first answer");
+
+  let notice = null;
+  if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(used, 'round')}. The AI's answer is now correct.` });
+  else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'You have used every round. Your rounds are recorded as they are.' });
+  else if (a.notice) notice = el('div', { class: 'notice warn', text: a.notice });
+
+  const draft = el('textarea', { class: 'ruled short', id: `critique-${q.id}`, placeholder: 'Name the claim that is wrong and explain why. The AI changes only what you point out.', disabled: locked() || a.solved || outOfRounds });
+  draft.value = a.draft || '';
+  const send = el('button', { class: 'btn pen', type: 'button', text: 'Send to the AI' });
+  const errorBox = el('div');
+  const updateSend = () => { send.disabled = locked() || a.solved || outOfRounds || !draft.value.trim() || a.score == null; };
+  draft.addEventListener('input', () => { a.draft = draft.value; saveState(); updateSend(); });
+  send.addEventListener('click', async () => {
+    send.disabled = true; draft.disabled = true; send.textContent = 'The AI is revising…';
+    meter.status('Revising, then scoring the new version…');
+    try {
+      const d = await api('/api/correction/round', { question_id: q.id, current_answer: a.ai_answer, feedback: draft.value.trim() });
+      a.rounds.push({
+        round: used + 1, feedback: draft.value.trim(), revised_answer: d.revised_answer,
+        feedback_specific: d.feedback_specific, changed: d.changed,
+        score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
+      });
+      if (d.changed) a.previous_answer = a.ai_answer;
+      a.ai_answer = d.revised_answer;
+      a.notice = d.feedback_specific ? null : "The AI made no changes. Your note didn't say which claim is wrong. Name the claim and explain what is wrong with it.";
+      Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
+      saveState(); fillQuestion(q); renderStrip(); fillSubmit();
+    } catch (e) {
+      errorBox.replaceChildren(el('div', { class: 'notice err', text: `That round did not go through: ${e.message}. Your note is still here; send it again.` }));
+      send.textContent = 'Send to the AI'; draft.disabled = false; updateSend(); meter.status('');
+    }
+  });
+  updateSend();
+
+  if (a.score == null && !scoring.has(q.id)) {
+    scoring.add(q.id);
+    meter.status("Jev is scoring the AI's first answer…");
+    api('/api/correction/score', { question_id: q.id, answer: a.ai_answer })
+      .then((d) => { Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); fillQuestion(q); })
+      .catch((e) => { meter.status(`Scoring is unavailable: ${e.message}.`); })
+      .finally(() => scoring.delete(q.id));
+  }
+
+  const log = a.rounds.length
+    ? el('div', {},
+        el('div', { class: 'label', text: 'Your rounds' }),
+        el('ol', { class: 'rounds' }, a.rounds.map((r) => el('li', {},
+          el('span', { class: 'n', text: `R${r.round}` }),
+          el('span', { text: r.feedback }),
+          el('span', { class: 'meta', text: r.feedback_specific === false
+            ? 'No change. The note did not say which claim is wrong.'
+            : `Jev ${points(r.score)}/100 · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
+        ))))
+    : null;
+
+  return el('div', { style: 'display:grid;gap:22px' },
+    sheet,
+    meter.root,
+    notice,
+    el('div', { class: 'critique' },
+      el('label', { class: 'field', style: 'margin:0', for: `critique-${q.id}`, text: "What's wrong with the AI's answer?" }),
+      draft, errorBox,
+      el('div', { class: 'row' }, el('span', { class: 'small muted', text: `Round ${Math.min(used + 1, q.max_rounds)} of ${q.max_rounds}` }), send)),
+    log,
+  );
+}
+
+function feedbackBlock(q) {
+  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Was the question clear? Too easy or too hard? Did the score feel fair?', disabled: locked() });
   box.value = S.feedback[q.id];
-  box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); onChange(); renderChrome(); });
-  return el('div', { class: 'card feedback-card' },
-    el('label', { class: 'field', for: `fb-${q.id}`, style: 'margin-top:0', text: 'Question feedback · 1 credit · required to continue' }),
+  box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); renderStrip(); fillSubmit(); });
+  return el('div', { class: 'feedback' },
+    el('label', { class: 'field', for: `feedback-${q.id}` }, 'Feedback on this question · ', el('span', { class: 'credit', text: '1 credit' })),
     box,
   );
 }
 
-function navRow(index, canAdvance) {
-  const back = el('button', { class: 'btn secondary', text: '← Back', onclick: () => { S.view = index === 0 ? 'intro' : index - 1; saveState(); render(); } });
-  const last = index === A.questions.length - 1;
-  const next = el('button', { class: 'btn', text: last ? 'Review & submit →' : 'Next question →', onclick: () => { S.view = last ? 'review' : index + 1; saveState(); render(); } });
-  const update = () => { next.disabled = !canAdvance(); };
-  update();
-  return { root: el('div', { class: 'nav-row' }, back, next), update };
-}
-
-function viewQuestion(index) {
-  const q = A.questions[index];
-  const head = el('div', { class: 'card' },
-    el('div', { class: 'qhead' },
-      el('span', { class: 'badge', text: `Question ${index + 1} of ${A.questions.length}` }),
-      el('span', { class: 'badge', text: q.topic }),
-      el('span', { class: `badge ${q.type}`, text: q.type === 'live' ? 'live answer' : 'fix the AI' }),
-    ),
-    el('h2', { text: q.title }),
-    el('div', { class: 'prompt', text: q.prompt }),
-    revealBox(q),
-  );
-  const nav = navRow(index, () => S.feedback[q.id].trim().length > 0);
-  const body = q.type === 'live' ? liveBody(q) : correctionBody(q);
-  return el('div', {}, head, body, questionFeedbackCard(q, nav.update), nav.root);
-}
-
-function liveBody(q) {
-  const ans = S.answers[q.id];
-  const box = el('textarea', { id: `ans-${q.id}`, placeholder: 'Type your answer…' });
-  box.value = ans.text;
-  const meter = makeMeter('Correctness · scored live by Jev');
-  meter.set(ans.score);
-  meter.status(ans.score == null ? 'Start typing to get a score.' : 'last score');
-  const cosine = A.dev_cosine ? el('div', { class: 'dev-line', text: 'dev · cosine similarity: —' }) : null;
-
-  const hintBtn = el('button', { class: 'btn', text: 'Get a hint' });
-  const hintCount = el('div', { class: 'small muted' });
-  const hintList = el('ul', { class: 'hint-list' });
-  const drawHints = () => hintList.replaceChildren(...ans.hints.map((h) => el('li', { text: h })));
-  const updateHint = () => {
-    const left = A.max_hints - ans.hints.length;
-    hintCount.textContent = ans.score != null && ans.score >= A.hint_threshold
-      ? `${left} hint${left === 1 ? '' : 's'} left · hints unlock below ${Math.round(A.hint_threshold * 100)}%`
-      : `${left} hint${left === 1 ? '' : 's'} left`;
-    hintBtn.disabled = !(ans.score != null && ans.score < A.hint_threshold && left > 0);
-  };
-  hintBtn.addEventListener('click', async () => {
-    hintBtn.disabled = true; hintBtn.textContent = 'Thinking…';
-    try {
-      const d = await api('/api/hint', { session_id: S.sessionId, question_id: q.id, text: ans.text });
-      if (d.error) ans.hints.push(`Hint unavailable: ${d.detail || d.error}`);
-      else ans.hints.push(d.hint);
-      saveState(); drawHints();
-    } catch (e) { ans.hints.push(`Hint unavailable: ${e.message}`); drawHints(); }
-    hintBtn.textContent = 'Get a hint'; updateHint();
-  });
-  drawHints(); updateHint();
-
-  box.addEventListener('input', () => { ans.text = box.value; saveState(); scheduleJev(q.id); });
-  liveUi = { qid: q.id, meter, updateHint, cosine };
-  if (ans.text.trim() && ans.score == null) setTimeout(() => sendJev(q.id), 50);
-
-  return el('div', {},
-    el('div', { class: 'card' }, box),
-    el('div', { class: 'card' }, meter.root, cosine),
-    el('div', { class: 'card' }, el('div', { class: 'hint-row' }, hintBtn, hintCount), hintList),
-  );
-}
-
-function correctionBody(q) {
-  const ans = S.answers[q.id];
-  const roundsUsed = ans.rounds.length;
-  const outOfRounds = roundsUsed >= q.max_rounds;
-
-  const aiText = el('div', { class: 'ai-text' });
-  splitSentences(ans.ai_answer).forEach((s, i, all) => {
-    const isNew = ans.previous_answer != null && !splitSentences(ans.previous_answer).includes(s);
-    aiText.appendChild(isNew ? el('mark', { text: s }) : document.createTextNode(s));
-    if (i < all.length - 1) aiText.appendChild(document.createTextNode(' '));
-  });
-  const meter = makeMeter("Correctness of the AI's answer · Jev");
-  meter.set(ans.score);
-  const dots = el('div', { class: 'mistakes' },
-    el('span', { text: 'Mistakes fixed:' }),
-    Array.from({ length: q.mistake_count }, (_, i) => el('span', { class: `dot${ans.fixed && ans.fixed[i] ? ' fixed' : ''}` })),
-    el('span', { text: ans.fixed_count == null ? '' : `${ans.fixed_count} of ${q.mistake_count}` }),
-  );
-
-  let banner = null;
-  if (ans.solved) banner = el('div', { class: 'banner ok', text: `Solved in ${roundsUsed} round${roundsUsed === 1 ? '' : 's'}. The AI's answer is now correct.` });
-  else if (outOfRounds) banner = el('div', { class: 'banner warn', text: `No rounds left. Your rounds are recorded as they are.` });
-  else if (ans.notice) banner = el('div', { class: 'banner warn', text: ans.notice });
-
-  const draft = el('textarea', { class: 'short', id: `draft-${q.id}`, placeholder: "Be specific: say which claim is wrong and why. The AI only changes what you point out." });
-  draft.value = ans.draft || '';
-  const send = el('button', { class: 'btn violet', text: 'Send to the AI' });
-  const roundInfo = el('div', { class: 'small muted', text: `Round ${Math.min(roundsUsed + 1, q.max_rounds)} of ${q.max_rounds}` });
-  const errorBox = el('div');
-  const updateSend = () => { send.disabled = ans.solved || outOfRounds || !draft.value.trim() || ans.score == null; };
-  draft.addEventListener('input', () => { ans.draft = draft.value; saveState(); updateSend(); });
-  send.addEventListener('click', async () => {
-    send.disabled = true; send.textContent = 'AI is revising…'; draft.disabled = true;
-    meter.status('The AI is revising, then Jev scores the new version…');
-    try {
-      const d = await api('/api/correction/round', { question_id: q.id, current_answer: ans.ai_answer, feedback: draft.value.trim() });
-      ans.rounds.push({
-        round: ans.rounds.length + 1, feedback: draft.value.trim(), revised_answer: d.revised_answer,
-        feedback_specific: d.feedback_specific, changed: d.changed,
-        score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
-      });
-      if (d.changed) ans.previous_answer = ans.ai_answer;
-      ans.ai_answer = d.revised_answer;
-      ans.notice = d.feedback_specific ? null
-        : "The AI made no changes. Your feedback didn't say which claim is wrong. Name the claim and explain what is wrong with it.";
-      Object.assign(ans, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
-      saveState(); render();
-    } catch (e) {
-      errorBox.replaceChildren(el('div', { class: 'banner err', text: `That round failed: ${e.message}. Your feedback is kept; try again.` }));
-      send.textContent = 'Send to the AI'; draft.disabled = false; updateSend(); meter.status('');
-    }
-  });
-
-  if (ans.score == null) {
-    meter.status("Jev is scoring the AI's first answer…");
-    api('/api/correction/score', { question_id: q.id, answer: ans.ai_answer })
-      .then((d) => { Object.assign(ans, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); render(); })
-      .catch((e) => { meter.status(`Scoring unavailable: ${e.message}`); });
-  } else {
-    meter.status(roundsUsed ? `after round ${roundsUsed}` : "the AI's first answer");
-  }
-  updateSend();
-
-  const history = ans.rounds.length
-    ? el('div', { class: 'card' },
-        el('div', { class: 'meter-label', style: 'margin-bottom:8px', text: 'Your rounds' }),
-        el('ol', { class: 'rounds' }, ans.rounds.map((r) => el('li', {},
-          el('div', {}, el('strong', { text: `Round ${r.round}. ` }), `You: ${r.feedback}`),
-          el('div', { class: 'round-meta', text: r.feedback_specific === false
-            ? 'No change: the feedback did not say which claim is wrong.'
-            : `Jev ${pct(r.score)} · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
-        ))),
-      )
-    : null;
-
-  return el('div', {},
-    el('div', { class: 'card ai-card' },
-      el('div', { class: 'ai-label', text: !roundsUsed ? "The AI's answer"
-        : ans.rounds[roundsUsed - 1].changed === false ? `The AI's answer · after round ${roundsUsed} (no changes)`
-        : `The AI's answer · after round ${roundsUsed} (changes highlighted)` }),
-      aiText, dots,
-    ),
-    el('div', { class: 'card' }, meter.root),
-    el('div', { class: 'card' }, banner,
-      el('label', { class: 'field', for: `draft-${q.id}`, style: 'margin-top:0', text: "What's wrong with the AI's answer?" }),
-      draft, errorBox,
-      el('div', { class: 'nav-row', style: 'margin-top:12px' }, roundInfo, send),
-    ),
-    history,
-  );
-}
-
-function viewReview() {
-  const rows = A.questions.map((q, i) => {
-    const ans = S.answers[q.id];
-    const status = q.type === 'live'
-      ? (ans.text.trim() ? `answered · last score ${pct(ans.score)}` : 'not answered')
-      : (ans.solved ? `solved in ${ans.rounds.length} round${ans.rounds.length === 1 ? '' : 's'}` : `${ans.rounds.length} round${ans.rounds.length === 1 ? '' : 's'} · not solved`);
-    const fb = S.feedback[q.id].trim();
-    return el('div', { class: 'review-row' },
-      el('div', {}, el('strong', { text: `Q${i + 1}. ${q.title}` }), el('div', { class: 'small muted', text: status })),
-      el('div', { class: `small ${fb ? 'ok-text' : 'warn-text'}`, text: fb ? 'feedback ✓' : 'feedback missing' }),
-    );
-  });
-  const allFeedback = A.questions.every((q) => S.feedback[q.id].trim());
+function fillSubmit() {
+  const s = sections.submit;
+  if (!s) return;
+  if (S.submitted) { s.replaceChildren(...receipt()); return; }
+  const missing = A.questions.map((q, i) => ({ q, i })).filter(({ q }) => !hasFeedback(q));
+  const named = S.student.name && S.student.id;
+  const items = [
+    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : 'Missing, see the top' })),
+    ...A.questions.map((q, i) => {
+      const a = S.answers[q.id];
+      const work = q.type === 'live'
+        ? (a.text.trim() ? `Answered · last Jev score ${points(a.score)}` : 'Not answered')
+        : (a.solved ? `Solved in ${plural(a.rounds.length, 'round')}` : `${plural(a.rounds.length, 'round')}, not solved`);
+      return el('li', {},
+        el('span', {}, el('a', { href: `#${q.id}`, text: `Question ${i + 1}` }), ` · ${work}`),
+        el('span', { class: hasFeedback(q) ? 'yes' : 'no', text: hasFeedback(q) ? 'Feedback done' : 'Feedback missing' }));
+    }),
+  ];
   const consent = el('input', { type: 'checkbox', id: 'consent' });
   consent.checked = S.consent;
   consent.addEventListener('change', () => { S.consent = consent.checked; saveState(); });
-  const submit = el('button', { class: 'btn', text: 'Submit assignment' });
-  submit.disabled = !allFeedback;
+  const submit = el('button', { class: 'btn', type: 'button', text: 'Submit assignment' });
+  submit.disabled = !named || missing.length > 0;
   const errorBox = el('div');
   submit.addEventListener('click', async () => {
-    submit.disabled = true; submit.textContent = 'Submitting… (re-scoring every answer)';
+    submit.disabled = true; submit.textContent = 'Submitting and re-scoring every answer…';
     try {
       const answers = {};
       for (const q of A.questions) {
@@ -610,57 +690,49 @@ function viewReview() {
           ? { type: 'live', text: a.text, last_live_score: a.score, hints: a.hints }
           : { type: 'correction', ai_answer: a.ai_answer, rounds: a.rounds, solved: a.solved, fixed_count: a.fixed_count, last_live_score: a.score };
       }
-      const d = await api('/api/submit', {
-        student: S.student, session_id: S.sessionId, started_at: S.startedAt,
-        consent: S.consent, answers, feedback: S.feedback,
-      });
-      S.submitted = d; S.view = 'done'; saveState(); render();
+      S.submitted = await api('/api/submit', { student: S.student, session_id: S.sessionId, started_at: S.startedAt, consent: S.consent, answers, feedback: S.feedback });
+      saveState(); renderPage();
+      document.getElementById('submit').scrollIntoView({ block: 'start' });
     } catch (e) {
-      errorBox.replaceChildren(el('div', { class: 'banner err', text: `Submit failed: ${e.message}` }));
+      errorBox.replaceChildren(el('div', { class: 'notice err', text: `The submission did not go through: ${e.message}. Your answers are still here; try again.` }));
       submit.disabled = false; submit.textContent = 'Submit assignment';
     }
   });
-  return el('div', {},
-    el('div', { class: 'card' }, el('h2', { text: 'Review' }), el('div', { class: 'small muted', style: 'margin-bottom:8px', text: `${S.student.name} · ${S.student.id}` }), rows),
-    el('div', { class: 'card' },
-      el('label', { class: 'consent', for: 'consent' }, consent,
-        el('span', {}, el('strong', { text: 'I agree that Claude Code, an AI tool, may be used to help grade this assignment. ' }),
-          'A TA reviews every AI-assisted grade. If you leave this box unchecked, your assignment is graded by hand.')),
-    ),
-    allFeedback ? null : el('div', { class: 'banner warn', text: 'Every question needs its feedback box filled in before you can submit.' }),
+  s.replaceChildren(
+    el('h2', { id: 'submit-title', text: 'Submit' }),
+    el('ul', { class: 'checklist' }, items),
+    el('label', { class: 'consent', for: 'consent' }, consent,
+      el('span', {}, el('strong', { text: 'Claude Code, an AI tool, may help grade this assignment. ' }),
+        'A TA reviews every AI-assisted grade. Leave this unchecked and a TA grades your work by hand.')),
     errorBox,
-    el('div', { class: 'nav-row' },
-      el('button', { class: 'btn secondary', text: '← Back', onclick: () => { S.view = A.questions.length - 1; saveState(); render(); } }),
+    el('div', { class: 'row' },
+      el('span', { class: 'small muted', text: missing.length ? `Add feedback to ${plural(missing.length, 'question')} to submit.` : named ? 'Ready to submit.' : 'Add your name and student ID at the top to submit.' }),
       submit),
   );
 }
 
-function viewDone() {
+function receipt() {
   const d = S.submitted;
   const rows = A.questions.map((q, i) => {
     const s = d.server_scores[q.id] || {};
-    const detail = s.error ? `not scored: ${s.error}`
-      : q.type === 'live' ? `Jev ${pct(s.score)}`
-      : `Jev ${pct(s.score)} · ${s.fixed_count} of ${q.mistake_count} mistakes fixed${s.solved ? ' · solved' : ''}`;
-    return el('div', { class: 'review-row' }, el('strong', { text: `Q${i + 1}. ${q.title}` }), el('span', { class: 'small muted', text: detail }));
+    const detail = s.error ? `Not scored: ${s.error}`
+      : q.type === 'live' ? `Jev ${points(s.score)}/100`
+      : `Jev ${points(s.score)}/100 · ${s.fixed_count} of ${q.mistake_count} fixed${s.solved ? ' · solved' : ''}`;
+    return el('tr', {}, el('td', { text: `${i + 1}. ${q.title}` }), el('td', { text: detail }));
   });
-  const download = el('button', { class: 'btn secondary', text: 'Download a copy (JSON)' });
+  const download = el('button', { class: 'btn ghost', type: 'button', text: 'Download a copy' });
   download.addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(d.record, null, 2)], { type: 'application/json' });
-    const a = el('a', { href: URL.createObjectURL(blob), download: `${d.submission_id}.json` });
-    document.body.appendChild(a); a.click(); a.remove();
+    const link = el('a', { href: URL.createObjectURL(blob), download: `${d.submission_id}.json` });
+    document.body.appendChild(link); link.click(); link.remove();
   });
-  return el('div', {},
-    el('div', { class: 'card' },
-      el('h2', { text: 'Submitted' }),
-      el('p', { class: 'muted', text: `Submission ID: ${d.submission_id}` }),
-      el('p', { class: 'small muted', text: 'The server re-scored every answer at submission. These are the scores that were recorded:' }),
-      rows,
-      el('p', { class: 'small muted', text: `Question feedback: ${d.feedback_credits} of ${A.questions.length} credits. Claude Code grading: ${d.record.consent_claude_code_grading ? 'allowed' : 'not allowed (graded by hand)'}.` }),
-      el('div', { class: 'nav-row' }, download,
-        A.demo_mode ? el('button', { class: 'btn', text: 'Start over (demo)', onclick: () => { S = freshState(); saveState(); render(); } }) : el('span')),
-    ),
-  );
+  return [
+    el('h2', { id: 'submit-title', text: 'Submitted' }),
+    el('p', { class: 'muted', style: 'margin:0' }, 'Submission ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
+    el('div', { style: 'overflow-x:auto' }, el('table', { class: 'receipt' }, el('tbody', {}, rows))),
+    el('p', { class: 'small muted', style: 'margin:0', text: `The server scored every answer again on submit; these are the recorded scores. Feedback credits: ${d.feedback_credits} of ${A.questions.length}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'allowed' : 'not allowed, graded by hand'}.` }),
+    el('div', { class: 'row' }, download),
+  ];
 }
 
 // ---------- boot ----------
@@ -668,12 +740,12 @@ async function init() {
   try {
     A = await api('/api/assignment');
   } catch (e) {
-    document.getElementById('app').replaceChildren(el('div', { class: 'card banner err', text: `Could not load the assignment: ${e.message}` }));
+    document.getElementById('app').replaceChildren(el('div', { class: 'notice err', text: `The assignment could not load: ${e.message}. Reload the page to try again.` }));
     return;
   }
   S = reconcileState(loadState());
   saveState();
-  render();
+  renderPage();
   connectJev();
   if (A.dev_cosine) connectCosine();
 }
