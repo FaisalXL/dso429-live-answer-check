@@ -15,8 +15,10 @@ import json
 import httpx
 import websockets
 
-BASE = "http://127.0.0.1:8001"
-WS = "ws://127.0.0.1:8001/ws/jev"
+import os
+
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+WS = BASE.replace("https://", "wss://").replace("http://", "ws://") + "/ws/jev"
 
 LIVE_CASES = {
     "q1": [
@@ -72,7 +74,7 @@ async def main():
             print(f"{qid} {label:32s} expect {expect:4s} got {r['score']*100:5.1f}%  {'ok' if ok else 'MISMATCH'}")
 
     print("\n== fix-the-AI questions ==")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as client:
+    async with httpx.AsyncClient(base_url=BASE, timeout=120) as client:
         assignment = (await client.get("/api/assignment")).json()
         seeds = {q["id"]: q["seed_answer"] for q in assignment["questions"] if q["type"] == "correction"}
         for qid, name, script in CORRECTION_SCRIPTS:
