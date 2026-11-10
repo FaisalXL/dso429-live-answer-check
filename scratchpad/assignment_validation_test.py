@@ -41,11 +41,11 @@ LIVE_CASES = {
 CORRECTION_SCRIPTS = [
     ("q3", "step by step", [
         ("vague", "This answer is wrong, fix it."),
-        ("one mistake (m1)", "Running the fixed test is not free. While it runs, it keeps sending the two weaker notifications to a third of riders each, so Pedalwise loses responses it could have won."),
-        ("remaining (m2, m3)", "Thompson sampling does not always send the version with the highest current average; that would be greedy. It keeps a belief about each version's response rate, samples from each belief, and sends the version with the highest sample, so uncertain versions still get tried. Also, a fixed test can still be the better choice, for example when Pedalwise needs a clean, unbiased estimate of how much better one version is for a long-term decision."),
+        ("one mistake (m1)", "It doesn't look answers up in a database. A language model writes its answer by predicting the most likely next words, based on patterns it learned in training."),
+        ("remaining (m2, m3)", "It doesn't automatically know Pedalwise's current prices or rules; that information has to be given to it, for example in its instructions or in documents it can search. And it can make things up: it can confidently state a wrong price or rule, which is called a hallucination."),
     ]),
     ("q3", "wrong critique", [
-        ("wrong", "The mistake is about the fixed test: a fixed A/B/C test should send all riders to the first notification and never change. That is how fixed tests work."),
+        ("wrong", "The part about the database is wrong: the chatbot actually has a human operator who types every answer in real time."),
     ]),
     ("q5", "one round", [
         ("all three", "The contract can't see the physical world. It needs an outside data source, an oracle, such as the dock reporting the return. Because of that, it can refund or keep a deposit wrongly if the dock data is faulty or tampered with, even if the code is correct. And deployed contract code generally can't be edited like an app; changing the rules means deploying a new contract or using an upgrade mechanism planned in advance."),
@@ -81,16 +81,18 @@ async def main():
             answer = seeds[qid]
             r = (await client.post("/api/correction/score", json={"question_id": qid, "answer": answer})).json()
             print(f"--- {qid} · {name}")
-            print(f"{qid} seed                       score {r['score']*100:5.1f}%  fixed {r['fixed']}  solved {r['solved']}")
+            prev = r["fixed"]
+            print(f"{qid} seed                     progress {r['progress']*100:5.1f}%  fixed {r['fixed']}  solved {r['solved']}")
             for label, feedback in script:
-                r = (await client.post("/api/correction/round", json={"question_id": qid, "current_answer": answer, "feedback": feedback})).json()
+                r = (await client.post("/api/correction/round", json={"question_id": qid, "current_answer": answer, "feedback": feedback, "previous_fixed": prev})).json()
                 if "revised_answer" not in r:
                     print(f"{qid} {label:24s} ERROR {r}")
                     failures += 1
                     break
                 unchanged = r["revised_answer"].strip() == answer.strip()
-                print(f"{qid} {label:24s} score {r['score']*100:5.1f}%  fixed {r['fixed']}  solved {r['solved']}  specific={r['feedback_specific']}  unchanged={unchanged}")
+                print(f"{qid} {label:24s} progress {r['progress']*100:5.1f}%  fixed {r['fixed']}  solved {r['solved']}  specific={r['feedback_specific']}  rejected={r['rejected']}  unchanged={unchanged}")
                 answer = r["revised_answer"]
+                prev = r["fixed"]
             print(f"   final AI answer: {answer}\n")
         print("== vague-feedback gate ==")
         vague = ["This answer is wrong, fix it.", "Try again and be more accurate.",

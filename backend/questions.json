@@ -36,31 +36,34 @@
     {
       "id": "q3",
       "type": "correction",
-      "topic": "Bandits",
-      "title": "Fix the AI's explanation",
-      "prompt": "Pedalwise has three versions of a push notification that offers riders a discount on their next ride, and it must decide which version to send this month. Explain how a Thompson sampling bandit differs from a fixed A/B/C test, and name one situation where the fixed A/B/C test is still the better choice.",
-      "reference_answer": "A fixed A/B/C test splits riders evenly across the three versions for the whole test. It keeps sending the weaker versions the entire time, so Pedalwise loses responses it could have won, which is the regret of testing, and it gets a clean comparison only at the end. Thompson sampling keeps a belief about each version's response rate, usually a Beta distribution, draws a random sample from each belief for every rider, and sends the version with the highest draw. As evidence builds, traffic shifts toward the better versions while uncertain versions still get some traffic, so it explores and exploits at the same time and loses far fewer responses. A fixed test is still the better choice when Pedalwise needs a clean, unbiased estimate of how much better one version is, for example to report the result or to make a long-term decision, or when the campaign is too short for a bandit to learn.",
-      "seed_answer": "A fixed A/B/C test splits riders evenly across the three notifications. Since Pedalwise learns which notification works best at the end of the test, running the test costs nothing. Thompson sampling is smarter: for every rider, it looks at which notification currently has the highest average response rate and always sends that one, so no traffic is wasted on weaker versions. Because a bandit beats a fixed test on every measure, there is no situation where Pedalwise should run a fixed A/B/C test instead.",
+      "topic": "AI chatbots",
+      "title": "Fix the AI's chatbot explanation",
+      "prompt": "Pedalwise wants to add an AI chatbot, built on a large language model, to answer riders' questions about prices and rules. Explain in plain terms how the chatbot produces its answers, and what it can and cannot be trusted to do.",
+      "reference_answer": "A large language model writes its answer one word at a time, predicting the text most likely to come next from patterns it learned in training. It does not look answers up in a database. It does not know Pedalwise's current prices or rules unless that information is given to it, for example in its instructions or in documents it can search. Because it predicts plausible text, it can state wrong information confidently, such as a made-up price or rule; this is called a hallucination. So Pedalwise should give it the official prices and rules, test it, and send questions it can't answer reliably to a person.",
+      "seed_answer": "The chatbot works by looking up the correct answer in a giant database of facts, the same way a search engine does. Because it was trained on the whole internet, it automatically knows Pedalwise's current prices and rules. Since it is a computer program, it never makes things up: if it does not know something, it always says so.",
       "mistakes": [
         {
           "id": "m1",
-          "error": "Claims that running the fixed A/B/C test costs nothing, ignoring that it keeps sending weaker versions and loses responses (regret) while the test runs."
+          "error": "The chatbot looks up answers in a database of facts, like a search engine.",
+          "fix": "It writes its answer by predicting likely next words from patterns it learned in training."
         },
         {
           "id": "m2",
-          "error": "Describes Thompson sampling as always sending the version with the highest current average (a purely greedy rule), instead of sampling from a belief about each version so that uncertain versions still get explored."
+          "error": "The chatbot automatically knows Pedalwise's current prices and rules from its training.",
+          "fix": "It only knows Pedalwise's prices and rules if that information is given to it, for example in its instructions or in documents it can search."
         },
         {
           "id": "m3",
-          "error": "Claims a bandit is always better, or that there is no situation where a fixed A/B/C test is the better choice."
+          "error": "The chatbot never makes things up and always says when it does not know.",
+          "fix": "It can state wrong information confidently, for example a made-up price or rule (a hallucination)."
         }
       ],
       "max_rounds": 5,
       "jev": {
-        "instructions": "Is the AI's answer fully correct? It must correctly explain how Thompson sampling differs from a fixed A/B/C test (the fixed test keeps sending weaker versions and loses responses while it runs; Thompson sampling samples from a belief about each version, shifting traffic toward better versions while still exploring uncertain ones) and name a valid situation where a fixed test is the better choice. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "instructions": "Is the AI's answer fully correct? It must explain that the chatbot produces answers by predicting likely text from patterns learned in training rather than looking them up, that it only knows Pedalwise's prices and rules if they are given to it, and that it can state wrong information confidently. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
         "criteria": {
-          "true": "Every claim is correct, the difference is explained correctly, and a valid situation that favors a fixed test is named.",
-          "false": "Contains at least one false claim, or leaves out the difference or the situation that favors a fixed test."
+          "true": "Every claim is correct and all three points are covered.",
+          "false": "Contains at least one false claim, or leaves out one of the three points."
         }
       }
     },
@@ -90,15 +93,18 @@
       "mistakes": [
         {
           "id": "m1",
-          "error": "Claims the smart contract can detect the bike's return by itself, or that no outside data source (oracle) is needed."
+          "error": "The smart contract can detect the bike's return by itself, so no outside data is needed.",
+          "fix": "The contract cannot see the physical world; it relies on an outside data source (an oracle), such as the dock reporting the return."
         },
         {
           "id": "m2",
-          "error": "Claims the contract can never refund or keep a deposit wrongly, ignoring that a faulty or tampered outside data source (oracle) causes wrong outcomes even when the code runs correctly."
+          "error": "Because the rule is written in code, the contract can never refund or keep a deposit by mistake.",
+          "fix": "If the outside data is faulty or tampered with, the contract can refund or keep a deposit wrongly even though its code is correct."
         },
         {
           "id": "m3",
-          "error": "Claims Pedalwise can simply edit the deployed contract, like updating a normal app."
+          "error": "Pedalwise can simply edit the deployed contract, like updating a normal app.",
+          "fix": "Deployed contract code generally cannot be edited; changing the rules means deploying a new contract or using an upgrade mechanism planned in advance."
         }
       ],
       "max_rounds": 5,

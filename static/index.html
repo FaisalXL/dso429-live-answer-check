@@ -155,6 +155,7 @@
   .btn.ghost { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
   .btn.pen { background: var(--red); border-color: var(--red); color: var(--sheet); }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.small-btn { font-size: 13px; padding: 8px 12px; color: var(--ink-2); }
   .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
   .muted { color: var(--ink-2); }
   .small { font-size: 13px; }
@@ -202,17 +203,6 @@
   .sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-bottom: 14px; }
   .ai-text { font: 400 1.06rem/1.72 var(--font-display); }
   .ai-text mark { background: var(--blue-soft); color: inherit; box-shadow: inset 0 -2px 0 var(--blue); padding: 0 1px; }
-  .rubric {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
-    margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--rule-strong);
-    font-size: 14px; color: var(--ink-2);
-  }
-  .marks { display: inline-flex; gap: 6px; }
-  .mark {
-    width: 18px; height: 18px; border-radius: 3px; border: 1.5px solid var(--rule-strong);
-    display: inline-grid; place-items: center; font: 600 12px/1 var(--font-body); color: transparent;
-  }
-  .mark.on { border-color: var(--good); background: var(--good); color: var(--sheet); }
   .notice { padding: 12px 14px; border-radius: 6px; font-size: 15px; border: 1px solid; }
   .notice.ok { background: var(--good-soft); border-color: var(--good); }
   .notice.warn { background: var(--warn-soft); border-color: var(--warn); }
@@ -257,7 +247,7 @@
 <main id="app"><p class="muted">Loading…</p></main>
 
 <script>
-const STORAGE_KEY = 'live-answer-lab-v2';
+const STORAGE_KEY = 'live-answer-lab-v3';
 const JEV_THROTTLE_MS = 500;
 
 let A = null;            // assignment config from the server
@@ -314,10 +304,10 @@ function freshAnswer(q) {
 function freshState() {
   const answers = {}, feedback = {};
   for (const q of A.questions) { answers[q.id] = freshAnswer(q); feedback[q.id] = ''; }
-  return { version: 2, sessionId: A.session_id, startedAt: new Date().toISOString(), student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null };
+  return { version: 3, sessionId: A.session_id, startedAt: new Date().toISOString(), student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null, resets: {}, restarts: 0 };
 }
 function reconcileState(saved) {
-  if (!saved || saved.version !== 2) return freshState();
+  if (!saved || saved.version !== 3) return freshState();
   for (const q of A.questions) {
     if (!saved.answers[q.id]) saved.answers[q.id] = freshAnswer(q);
     if (saved.feedback[q.id] == null) saved.feedback[q.id] = '';
@@ -388,7 +378,7 @@ function makeMeter({ label, markAt, markText }) {
   const value = el('div', { class: 'meter-value' }, el('span', { text: '—' }), el('small', { text: '/100' }));
   const fill = el('div', { class: 'meter-fill' });
   const track = el('div', { class: 'meter-track', role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': label },
-    fill, el('div', { class: 'meter-marker', style: `left:${markAt * 100}%` }));
+    fill, markAt == null ? null : el('div', { class: 'meter-marker', style: `left:${markAt * 100}%` }));
   const scale = el('div', { class: 'meter-scale', 'aria-hidden': 'true' },
     [0, 25, 50, 75, 100].map((n) => el('span', { style: `left:${n}%`, text: String(n) })));
   const status = el('span', { class: 'meter-status', text: '' });
@@ -455,12 +445,11 @@ function renderStrip() {
     return el('a', { class: `tab ${cls}`, href: `#${q.id}`, 'aria-label': `Question ${i + 1}`, text: String(i + 1) });
   });
   tabs.push(el('a', { class: 'tab', href: '#submit', text: 'Submit' }));
-  if (A.demo_mode) {
-    tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Reset demo', onclick: () => {
-      if (!confirm('Clear every answer and start over?')) return;
-      S = freshState(); saveState(); renderPage(); window.scrollTo({ top: 0 });
-    } }));
-  }
+  tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Start over', onclick: () => {
+    if (!confirm('Clear every answer and start the whole assignment over? Your name and ID stay.')) return;
+    const keep = { student: S.student, restarts: (S.restarts || 0) + 1 };
+    S = Object.assign(freshState(), keep); saveState(); renderPage(); window.scrollTo({ top: 0 });
+  } }));
   document.getElementById('tabs').replaceChildren(...tabs);
 }
 
@@ -504,11 +493,19 @@ function fillQuestion(q) {
       el('h2', { id: `${q.id}-title`, text: q.title }),
     ),
   );
+  // Resetting also gives back the rounds, so each reset is recorded for graders.
+  const restart = el('button', { class: 'btn ghost small-btn', type: 'button', text: 'Start this question over', disabled: locked(), onclick: () => {
+    if (!confirm('Clear your work on this question and start it over? Your feedback stays.')) return;
+    S.answers[q.id] = freshAnswer(q);
+    S.resets[q.id] = (S.resets[q.id] || 0) + 1;
+    saveState(); fillQuestion(q); renderStrip(); fillSubmit();
+  } });
   sections[q.id].replaceChildren(
     head,
     el('p', { class: 'prompt', text: q.prompt }),
     answerKey(q),
     q.type === 'live' ? liveBody(q) : fixBody(q),
+    el('div', { class: 'row', style: 'justify-content:flex-end' }, restart),
     feedbackBlock(q),
   );
 }
@@ -566,23 +563,18 @@ function fixBody(q) {
   const sheetLabel = !used ? "AI answer"
     : last.changed === false ? `AI answer · round ${used} · no changes`
     : `AI answer · round ${used} · changes underlined`;
-  const marks = el('span', { class: 'marks' },
-    Array.from({ length: q.mistake_count }, (_, i) => el('span', { class: `mark${a.fixed && a.fixed[i] ? ' on' : ''}`, text: '✓' })));
   const sheet = el('div', { class: 'sheet' },
     el('div', { class: 'sheet-head' }, el('span', { class: 'label', style: 'margin:0', text: sheetLabel })),
     text,
-    el('div', { class: 'rubric' },
-      el('span', { text: 'Mistakes fixed' }), marks,
-      el('span', { text: a.fixed_count == null ? '' : `${a.fixed_count} of ${q.mistake_count}` })),
   );
 
-  const meter = makeMeter({ label: 'Jev score', markAt: A.pass_threshold, markText: `Solved at ${Math.round(A.pass_threshold * 100)} + all mistakes fixed` });
-  meter.set(a.score);
+  const meter = makeMeter({ label: 'Score', markAt: null, markText: 'Solved when every claim is right' });
+  meter.set(a.progress);
   meter.status('');
 
   let notice = null;
   if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(used, 'round')}.` });
-  else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'No rounds left.' });
+  else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'No rounds left. Start over to try again.' });
   else if (a.notice) notice = el('div', { class: 'notice warn', text: a.notice });
 
   const draft = el('textarea', { class: 'ruled short', id: `critique-${q.id}`, placeholder: 'Which claim is wrong, and why?', disabled: locked() || a.solved || outOfRounds });
@@ -595,16 +587,18 @@ function fixBody(q) {
     send.disabled = true; draft.disabled = true; send.textContent = 'Revising…';
     meter.status('');
     try {
-      const d = await api('/api/correction/round', { question_id: q.id, current_answer: a.ai_answer, feedback: draft.value.trim() });
+      const d = await api('/api/correction/round', { question_id: q.id, current_answer: a.ai_answer, feedback: draft.value.trim(), previous_fixed: a.fixed });
       a.rounds.push({
         round: used + 1, feedback: draft.value.trim(), revised_answer: d.revised_answer,
-        feedback_specific: d.feedback_specific, changed: d.changed,
-        score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
+        feedback_specific: d.feedback_specific, changed: d.changed, rejected: d.rejected,
+        score: d.score, progress: d.progress, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
       });
       if (d.changed) a.previous_answer = a.ai_answer;
       a.ai_answer = d.revised_answer;
-      a.notice = d.feedback_specific ? null : 'No changes made. Say which claim is wrong, and why.';
-      Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
+      a.notice = !d.feedback_specific ? 'No changes made. Say which claim is wrong, and why.'
+        : d.rejected ? 'Not applied: the AI changed more than your note explained. Explain each claim you mention.'
+        : null;
+      Object.assign(a, { score: d.score, progress: d.progress, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
       saveState(); fillQuestion(q); renderStrip(); fillSubmit();
     } catch (e) {
       errorBox.replaceChildren(el('div', { class: 'notice err', text: `Round failed: ${e.message}. Try again.` }));
@@ -617,7 +611,7 @@ function fixBody(q) {
     scoring.add(q.id);
     meter.status('Scoring…');
     api('/api/correction/score', { question_id: q.id, answer: a.ai_answer })
-      .then((d) => { Object.assign(a, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); fillQuestion(q); })
+      .then((d) => { Object.assign(a, { score: d.score, progress: d.progress, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved }); saveState(); fillQuestion(q); })
       .catch((e) => { meter.status(`Scoring down: ${e.message}`); })
       .finally(() => scoring.delete(q.id));
   }
@@ -628,9 +622,9 @@ function fixBody(q) {
         el('ol', { class: 'rounds' }, a.rounds.map((r) => el('li', {},
           el('span', { class: 'n', text: `R${r.round}` }),
           el('span', { text: r.feedback }),
-          el('span', { class: 'meta', text: r.feedback_specific === false
-            ? 'No change: not specific'
-            : `${points(r.score)}/100 · ${r.fixed_count}/${q.mistake_count} fixed` }),
+          el('span', { class: 'meta', text: r.feedback_specific === false ? 'No change: not specific'
+            : r.rejected ? 'Not applied: AI overreached'
+            : `Score ${points(r.progress)}/100` }),
         ))))
     : null;
 
@@ -687,10 +681,10 @@ function fillSubmit() {
       for (const q of A.questions) {
         const a = S.answers[q.id];
         answers[q.id] = q.type === 'live'
-          ? { type: 'live', text: a.text, last_live_score: a.score, hints: a.hints }
-          : { type: 'correction', ai_answer: a.ai_answer, rounds: a.rounds, solved: a.solved, fixed_count: a.fixed_count, last_live_score: a.score };
+          ? { type: 'live', text: a.text, last_live_score: a.score, hints: a.hints, resets: S.resets[q.id] || 0 }
+          : { type: 'correction', ai_answer: a.ai_answer, rounds: a.rounds, solved: a.solved, fixed_count: a.fixed_count, fixed: a.fixed, last_progress: a.progress, resets: S.resets[q.id] || 0 };
       }
-      S.submitted = await api('/api/submit', { student: S.student, session_id: S.sessionId, started_at: S.startedAt, consent: S.consent, answers, feedback: S.feedback });
+      S.submitted = await api('/api/submit', { student: S.student, session_id: S.sessionId, started_at: S.startedAt, restarts: S.restarts || 0, consent: S.consent, answers, feedback: S.feedback });
       saveState(); renderPage();
       document.getElementById('submit').scrollIntoView({ block: 'start' });
     } catch (e) {
@@ -717,7 +711,7 @@ function receipt() {
     const s = d.server_scores[q.id] || {};
     const detail = s.error ? `Not scored: ${s.error}`
       : q.type === 'live' ? `Jev ${points(s.score)}/100`
-      : `Jev ${points(s.score)}/100 · ${s.fixed_count} of ${q.mistake_count} fixed${s.solved ? ' · solved' : ''}`;
+      : `Score ${points(s.progress)}/100${s.solved ? ' · solved' : ''}`;
     return el('tr', {}, el('td', { text: `${i + 1}. ${q.title}` }), el('td', { text: detail }));
   });
   const download = el('button', { class: 'btn ghost', type: 'button', text: 'Download a copy' });

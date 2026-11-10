@@ -122,16 +122,27 @@ async def score_live(question: dict, text: str) -> dict:
 
 
 def mistake_check(mistake: dict) -> dict:
+    # A mistake counts as fixed only when the correct idea replaces it.
+    # Merely deleting the wrong sentence used to count, which let students
+    # earn progress by pointing at sentences without knowing what was wrong.
     return {
         "type": "noul",
         "instructions": (
-            f"Is the AI's answer free of this error: {mistake['error']} The answer "
-            "is free of the error if it no longer makes that claim in any wording, "
-            "because the claim was removed or corrected."
+            "Check one point in the AI's answer, and ignore every other part of it, "
+            "including any other mistakes. Condition A: the answer does not make "
+            f"this wrong claim anywhere: {mistake['error']} Mentioning the wrong "
+            "idea only to deny it is fine. Condition B: the answer states this "
+            f"correct idea, in any wording: {mistake['fix']} The answer does not "
+            "need to mention the wrong claim at all. Answer true only if both "
+            "conditions hold."
         ),
         "criteria": {
-            "true": "The AI's answer does not make this claim.",
-            "false": "The AI's answer still makes this claim, in any wording.",
+            "true": "The wrong claim is gone and the correct idea is stated.",
+            "false": (
+                "The wrong claim is still there in any wording, or it was removed "
+                "without stating the correct idea, or it was replaced by a "
+                "different wrong idea."
+            ),
         },
     }
 
@@ -151,8 +162,13 @@ async def score_correction(question: dict, ai_answer: str) -> dict:
     )
     fixed = [answers[m["id"]]["noul"] >= 0.5 for m in question["mistakes"]]
     score = answers["correct"]["noul"]
+    # "Fully correct" alone sits near 0 until every mistake is fixed, so
+    # students saw no movement for a correct fix. Each fixed mistake is worth
+    # an equal share; the last share is Jev's whole-answer correctness.
+    progress = (sum(fixed) + score) / (len(fixed) + 1)
     return {
         "score": score,
+        "progress": progress,
         "fixed": fixed,
         "fixed_count": sum(fixed),
         "solved": all(fixed) and score >= PASS_THRESHOLD,
@@ -179,8 +195,9 @@ REVISE_SYSTEM_PROMPT = (
     "wrong claim in place and add a correction next to it. The revised answer "
     "must not contradict itself.\n"
     "4. Build each rewritten sentence from what the student says. If the student "
-    "explains the correct idea, state that idea clearly. If the student only says "
-    "a claim is wrong, remove or soften the claim without adding new ideas.\n"
+    "explains the correct idea, state that idea clearly. If the student says a "
+    "claim is wrong but not why or what should replace it, leave that claim "
+    "exactly as it is.\n"
     "5. Apply the feedback faithfully even if you think it is wrong. Do not "
     "argue, and do not add corrections or ideas of your own.\n"
     "6. Write any sentence you change in clear, natural English that fits the "
@@ -190,32 +207,61 @@ REVISE_SYSTEM_PROMPT = (
 )
 
 
-# Prompt rules alone did not stop the rewriting model from "improving" the
-# answer on vague feedback like "fix it". Jev makes this yes/no call
-# instead, before any rewrite, so vague feedback never reaches the model.
-FEEDBACK_SPECIFIC_CHECK = {
+# Prompt rules alone did not stop the rewriting model from acting on vague
+# notes like "fix it", questions, or notes that only point at a sentence.
+# Jev reviews the note first, and nothing reaches the rewriter unless the
+# note says what is wrong and why. Tested in
+# scratchpad/adversarial_correction_test.py.
+CRITIQUE_CHECK = {
     "type": "noul",
     "instructions": (
-        "Does the student's feedback point to a specific claim in the AI's answer, "
-        "or say specifically what is wrong with the AI's answer? Feedback such as "
-        "'fix it', 'this is wrong', 'try again', 'be more accurate', or 'there are "
-        "mistakes' is not specific. Feedback that names or paraphrases a claim, or "
-        "states an idea that contradicts a claim, is specific even if the feedback "
-        "itself is wrong."
+        "Is the student's note a critique of the AI's answer that says which claim "
+        "is wrong and why it is wrong, or what the correct idea is? Answer false "
+        "for: a question to the AI; a request to rewrite, fix, or solve the answer; "
+        "a generic note such as 'fix it' or 'this is wrong'; and a note that only "
+        "points at a claim or sentence without saying why it is wrong. A critique "
+        "counts even if the student's reasoning is itself wrong."
     ),
     "criteria": {
-        "true": "The feedback names or paraphrases a specific claim, or says specifically what is wrong.",
-        "false": "The feedback is generic and does not say which claim is wrong or what is wrong with it.",
+        "true": "Names at least one claim and says why it is wrong or what should replace it.",
+        "false": "A question, a request to fix or rewrite, a generic note, or only points at claims without a reason.",
     },
 }
 
 
-async def feedback_is_specific(current_answer: str, feedback: str) -> bool:
+def explains_check(mistake: dict) -> dict:
+    return {
+        "type": "noul",
+        "instructions": (
+            "Does the student's note correct this point in the AI's answer? The AI's "
+            f"answer wrongly claims: {mistake['error']} The correct idea is: "
+            f"{mistake['fix']} The note counts only if it says this claim is wrong and "
+            "gives the correct idea or a reason that matches it. Only pointing at "
+            "the claim does not count."
+        ),
+        "criteria": {
+            "true": "The note identifies this wrong claim and gives the correct idea or a matching reason.",
+            "false": "The note does not address this claim, only points at it, or gives a reason that does not match.",
+        },
+    }
+
+
+async def review_note(question: dict, current_answer: str, feedback: str) -> dict:
+    """One Jev call: is the note a real critique, which mistakes does it
+    explain, and which mistakes are already fixed in the current answer."""
+    checks = {"critique": CRITIQUE_CHECK}
+    for m in question["mistakes"]:
+        checks[f"explains_{m['id']}"] = explains_check(m)
+        checks[f"before_{m['id']}"] = mistake_check(m)
     answers, _ = await jev_decide(
-        {"ai_answer": current_answer, "student_feedback": feedback},
-        {"specific": FEEDBACK_SPECIFIC_CHECK},
+        {"question": question["prompt"], "ai_answer": current_answer, "student_note": feedback},
+        checks,
     )
-    return answers["specific"]["noul"] >= 0.5
+    return {
+        "critique": answers["critique"]["noul"] >= 0.5,
+        "explained": [answers[f"explains_{m['id']}"]["noul"] >= 0.5 for m in question["mistakes"]],
+        "fixed_before": [answers[f"before_{m['id']}"]["noul"] >= 0.5 for m in question["mistakes"]],
+    }
 
 
 async def revise_answer(question: dict, current_answer: str, feedback: str) -> str:
@@ -289,7 +335,7 @@ def reveal():
     return {
         q["id"]: {
             "reference_answer": q["reference_answer"],
-            "mistakes": [m["error"] for m in q.get("mistakes", [])],
+            "mistakes": [f"{m['error']} Correct idea: {m['fix']}" for m in q.get("mistakes", [])],
         }
         for q in ASSIGNMENT["questions"]
     }
@@ -396,16 +442,39 @@ async def correction_round(payload: dict):
     feedback = str(payload.get("feedback", "")).strip()[:2000]
     if not feedback:
         raise HTTPException(status_code=400, detail="feedback is empty")
+    # Mistakes the browser saw as fixed before this round. Used only to make
+    # the overreach check more lenient, never stricter, so a false value
+    # can't hurt anyone but the sender.
+    previous_fixed = payload.get("previous_fixed") or []
     try:
-        specific = await feedback_is_specific(current_answer, feedback)
-        revised = await revise_answer(question, current_answer, feedback) if specific else current_answer
+        review = await review_note(question, current_answer, feedback)
+        if not review["critique"]:
+            return {
+                "revised_answer": current_answer, "feedback_specific": False,
+                "changed": False, "rejected": False,
+                **await score_correction(question, current_answer),
+            }
+        revised = await revise_answer(question, current_answer, feedback)
         result = await score_correction(question, revised)
+        # Enforce on the output, not by trusting the rewriter: a mistake may
+        # only become fixed if it already was, or if this note explained it.
+        allowed = [
+            before or explained or (i < len(previous_fixed) and previous_fixed[i] is True)
+            for i, (before, explained) in enumerate(zip(review["fixed_before"], review["explained"]))
+        ]
+        if any(fixed and not ok for fixed, ok in zip(result["fixed"], allowed)):
+            return {
+                "revised_answer": current_answer, "feedback_specific": True,
+                "changed": False, "rejected": True,
+                **await score_correction(question, current_answer),
+            }
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=describe_error(exc)) from exc
     return {
         "revised_answer": revised,
-        "feedback_specific": specific,
+        "feedback_specific": True,
         "changed": revised.strip() != current_answer.strip(),
+        "rejected": False,
         **result,
     }
 
@@ -452,6 +521,7 @@ async def submit(payload: dict):
         "client": {
             "session_id": payload.get("session_id"),
             "started_at": payload.get("started_at"),
+            "restarts": payload.get("restarts", 0),
         },
         "answers": answers,
         "feedback": feedback,

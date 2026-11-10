@@ -13,6 +13,10 @@ a coffee-shop question, so they no longer match the running app.
   it checks three things: vague feedback changes nothing, feedback about
   one mistake fixes only that mistake, and complete feedback solves the
   question.
+- `adversarial_correction_test.py`: Tries to make the AI solve a
+  fix-the-AI question for the student: direct requests, prompt injection,
+  questions to the AI, and pointing at sentences without reasons. A leak
+  is any mistake fixed that the note did not explain. Result: 0 of 7.
 
 - `efficacy_test.py`: Measures how cosine similarity tracks answer
   quality. Compares keyword-dense wrong answers against correctly-reasoned

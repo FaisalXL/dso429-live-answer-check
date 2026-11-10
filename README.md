@@ -59,8 +59,11 @@ Each entry in `backend/questions.json` has these fields:
 - `jev`: The `instructions` and `criteria` that Jev uses to judge
   correctness.
 - For `correction` questions only: `seed_answer` (the flawed AI answer),
-  `mistakes` (one `error` description per planted mistake), and
-  `max_rounds`.
+  `mistakes`, and `max_rounds`. Each mistake has an `error` (the wrong
+  claim) and a `fix` (the correct idea). Jev counts a mistake as fixed
+  only when the correct idea replaces the wrong claim.
+- Make the seed answer contain only the planted mistakes. A weak but
+  true sentence can stop a fully fixed answer from counting as solved.
 
 **Write the `jev` instructions for each question by hand.** Name the
 ideas that a correct answer must contain. A generic version was tested
@@ -73,20 +76,31 @@ and failed. It cut the score of a correct answer from 90% to 45%. See
 every 500ms. The server keeps only the newest text per question. It runs
 one Jev call at a time. Fast typing therefore never builds a backlog.
 
-**Fix-the-AI rounds.** Each round runs three steps:
+**Fix-the-AI rounds.** Each round runs four steps:
 
-1. Jev decides whether the student's feedback names a specific claim.
-   If it does not, the answer stays unchanged and the student sees why.
-   Prompt rules alone did not stop the model from acting on "fix it."
-2. The revision model changes only the claims that the feedback
-   addresses. It applies wrong feedback too, so a wrong critique makes
-   the answer worse.
+1. Jev reviews the student's note. The note must say which claim is
+   wrong and why. Questions, requests to fix or rewrite, and notes that
+   only point at a sentence change nothing. The student sees why.
+2. The revision model changes only the claims that the note explains.
+   It applies wrong notes too, so a wrong critique gets no credit.
 3. One Jev call scores the new answer and checks each planted mistake.
+4. The server checks the result. If a mistake became fixed that the
+   note did not explain, the server discards the change. This check
+   does not depend on the revision model obeying its rules.
 
-A round is solved when every mistake is fixed and the score reaches
-`PASS_THRESHOLD`. The server rejects an answer that the model cut off
-before the end. A cut-off answer drops the remaining wrong claims, and
-Jev would count those mistakes as fixed.
+The score is progress. Each fixed mistake is worth an equal share. The
+last share is Jev's score for the whole answer. A question is solved
+when every mistake is fixed and that whole-answer score reaches
+`PASS_THRESHOLD`. Students do not see which mistakes are fixed; the
+submission record keeps that for graders.
+
+The server rejects an answer that the model cut off before the end. A
+cut-off answer drops the remaining wrong claims, and Jev would count
+those mistakes as fixed.
+
+`scratchpad/adversarial_correction_test.py` tries to get the AI to solve
+the question for the student: direct requests, prompt injection,
+questions, and pointing at sentences. Run it after any change.
 
 `scratchpad/assignment_validation_test.py` tested three revision models.
 `gpt-4o-mini` left broken half-sentences. `claude-haiku-5.5` added ideas
@@ -114,8 +128,9 @@ The deployed build does not include PyTorch, so it needs little memory.
   copies before real use.
 - **Identity.** Students type their own name and ID. The app does not
   check them.
-- **Round limit.** The browser enforces the round limit. The record
-  shows every round, so a grader can see extra rounds.
+- **Round limit.** The browser enforces the round limit. "Start this
+  question over" gives the rounds back. The record counts every reset
+  and every full restart, so a grader can see them.
 - **Jev instructions.** Each new question needs hand-written Jev
   instructions. See "Writing questions."
 
