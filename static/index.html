@@ -511,6 +511,7 @@ function correctionBody(q) {
   let banner = null;
   if (ans.solved) banner = el('div', { class: 'banner ok', text: `Solved in ${roundsUsed} round${roundsUsed === 1 ? '' : 's'}. The AI's answer is now correct.` });
   else if (outOfRounds) banner = el('div', { class: 'banner warn', text: `No rounds left. Your rounds are recorded as they are.` });
+  else if (ans.notice) banner = el('div', { class: 'banner warn', text: ans.notice });
 
   const draft = el('textarea', { class: 'short', id: `draft-${q.id}`, placeholder: "Be specific: say which claim is wrong and why. The AI only changes what you point out." });
   draft.value = ans.draft || '';
@@ -526,10 +527,13 @@ function correctionBody(q) {
       const d = await api('/api/correction/round', { question_id: q.id, current_answer: ans.ai_answer, feedback: draft.value.trim() });
       ans.rounds.push({
         round: ans.rounds.length + 1, feedback: draft.value.trim(), revised_answer: d.revised_answer,
+        feedback_specific: d.feedback_specific, changed: d.changed,
         score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, at: new Date().toISOString(),
       });
-      ans.previous_answer = ans.ai_answer;
+      if (d.changed) ans.previous_answer = ans.ai_answer;
       ans.ai_answer = d.revised_answer;
+      ans.notice = d.feedback_specific ? null
+        : "The AI made no changes. Your feedback didn't say which claim is wrong. Name the claim and explain what is wrong with it.";
       Object.assign(ans, { score: d.score, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
       saveState(); render();
     } catch (e) {
@@ -553,14 +557,18 @@ function correctionBody(q) {
         el('div', { class: 'meter-label', style: 'margin-bottom:8px', text: 'Your rounds' }),
         el('ol', { class: 'rounds' }, ans.rounds.map((r) => el('li', {},
           el('div', {}, el('strong', { text: `Round ${r.round}. ` }), `You: ${r.feedback}`),
-          el('div', { class: 'round-meta', text: `Jev ${pct(r.score)} · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
+          el('div', { class: 'round-meta', text: r.feedback_specific === false
+            ? 'No change: the feedback did not say which claim is wrong.'
+            : `Jev ${pct(r.score)} · ${r.fixed_count} of ${q.mistake_count} mistakes fixed` }),
         ))),
       )
     : null;
 
   return el('div', {},
     el('div', { class: 'card ai-card' },
-      el('div', { class: 'ai-label', text: roundsUsed ? `The AI's answer · after round ${roundsUsed} (changes highlighted)` : "The AI's answer" }),
+      el('div', { class: 'ai-label', text: !roundsUsed ? "The AI's answer"
+        : ans.rounds[roundsUsed - 1].changed === false ? `The AI's answer · after round ${roundsUsed} (no changes)`
+        : `The AI's answer · after round ${roundsUsed} (changes highlighted)` }),
       aiText, dots,
     ),
     el('div', { class: 'card' }, meter.root),

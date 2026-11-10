@@ -23,6 +23,11 @@ SUBMISSIONS_DIR = Path(os.environ.get("SUBMISSIONS_DIR", ROOT_DIR / "submissions
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+# Rewrites in fix-the-AI questions need strict instruction-following. Tested
+# (scratchpad/assignment_validation_test.py): gpt-4o-mini left garbled
+# half-sentences behind; claude-haiku-5.5 added explanation the student never
+# gave; claude-sonnet-5.5 kept to the student's own words.
+REVISION_MODEL = os.environ.get("REVISION_MODEL", "anthropic/claude-sonnet-5.5")
 JEV_MODEL = os.environ.get("JEV_MODEL", "typesafe/jev-1.13")
 HINT_THRESHOLD = float(os.environ.get("HINT_THRESHOLD", "0.5"))
 PASS_THRESHOLD = float(os.environ.get("PASS_THRESHOLD", "0.8"))
@@ -162,16 +167,55 @@ REVISE_SYSTEM_PROMPT = (
     "You wrote an answer to an exam question. A student is reviewing your answer "
     "and gives you feedback. Revise your answer by applying the student's "
     "feedback, following these rules exactly.\n"
-    "1. Change only the parts of your answer that the feedback addresses. Keep "
-    "every other sentence exactly as it is, word for word, including any errors "
-    "the student did not mention.\n"
-    "2. Apply the feedback faithfully even if you think it is wrong. Do not "
-    "argue, and do not add corrections of your own.\n"
-    "3. If the feedback does not say what is wrong (for example 'fix it' or "
-    "'this is wrong'), return your answer unchanged.\n"
-    "4. Return only the revised answer text, with no preamble, notes, or "
+    "1. First decide whether the feedback names a specific claim in your answer "
+    "or says specifically what is wrong with it. If it does not (for example "
+    "'fix it', 'this is wrong', 'try again', or 'be more accurate'), return your "
+    "answer exactly unchanged and ignore the other rules.\n"
+    "2. Change only the claims that the feedback addresses. Keep every other "
+    "sentence exactly as it is, word for word, including any errors the student "
+    "did not mention.\n"
+    "3. When the feedback says a claim is wrong, rewrite or remove the sentence "
+    "that makes that claim, so the answer no longer makes it. Never leave the "
+    "wrong claim in place and add a correction next to it. The revised answer "
+    "must not contradict itself.\n"
+    "4. Build each rewritten sentence from what the student says. If the student "
+    "explains the correct idea, state that idea clearly. If the student only says "
+    "a claim is wrong, remove or soften the claim without adding new ideas.\n"
+    "5. Apply the feedback faithfully even if you think it is wrong. Do not "
+    "argue, and do not add corrections or ideas of your own.\n"
+    "6. Write any sentence you change in clear, natural English that fits the "
+    "sentences around it.\n"
+    "7. Return only the revised answer text, with no preamble, notes, or "
     "quotation marks."
 )
+
+
+# Prompt rules alone did not stop the rewriting model from "improving" the
+# answer on vague feedback like "fix it". Jev makes this yes/no call
+# instead, before any rewrite, so vague feedback never reaches the model.
+FEEDBACK_SPECIFIC_CHECK = {
+    "type": "noul",
+    "instructions": (
+        "Does the student's feedback point to a specific claim in the AI's answer, "
+        "or say specifically what is wrong with the AI's answer? Feedback such as "
+        "'fix it', 'this is wrong', 'try again', 'be more accurate', or 'there are "
+        "mistakes' is not specific. Feedback that names or paraphrases a claim, or "
+        "states an idea that contradicts a claim, is specific even if the feedback "
+        "itself is wrong."
+    ),
+    "criteria": {
+        "true": "The feedback names or paraphrases a specific claim, or says specifically what is wrong.",
+        "false": "The feedback is generic and does not say which claim is wrong or what is wrong with it.",
+    },
+}
+
+
+async def feedback_is_specific(current_answer: str, feedback: str) -> bool:
+    answers, _ = await jev_decide(
+        {"ai_answer": current_answer, "student_feedback": feedback},
+        {"specific": FEEDBACK_SPECIFIC_CHECK},
+    )
+    return answers["specific"]["noul"] >= 0.5
 
 
 async def revise_answer(question: dict, current_answer: str, feedback: str) -> str:
@@ -179,7 +223,7 @@ async def revise_answer(question: dict, current_answer: str, feedback: str) -> s
         CHAT_URL,
         headers=auth_headers(),
         json={
-            "model": OPENROUTER_MODEL,
+            "model": REVISION_MODEL,
             "messages": [
                 {"role": "system", "content": REVISE_SYSTEM_PROMPT},
                 {
@@ -192,13 +236,20 @@ async def revise_answer(question: dict, current_answer: str, feedback: str) -> s
                     ),
                 },
             ],
-            "max_tokens": 500,
+            # Newer models spend part of this budget on hidden reasoning. At 500,
+            # answers were cut off mid-sentence.
+            "max_tokens": 4000,
             "temperature": 0.2,
         },
-        timeout=30.0,
+        timeout=60.0,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip().strip('"')
+    choice = resp.json()["choices"][0]
+    # A cut-off answer silently drops the remaining wrong claims, so Jev would
+    # report mistakes as fixed that were only truncated away. Never score one.
+    if choice.get("finish_reason") == "length":
+        raise HTTPException(status_code=502, detail="the AI's answer was cut off; send the feedback again")
+    return choice["message"]["content"].strip().strip('"')
 
 
 def public_question(question: dict) -> dict:
@@ -346,11 +397,17 @@ async def correction_round(payload: dict):
     if not feedback:
         raise HTTPException(status_code=400, detail="feedback is empty")
     try:
-        revised = await revise_answer(question, current_answer, feedback)
+        specific = await feedback_is_specific(current_answer, feedback)
+        revised = await revise_answer(question, current_answer, feedback) if specific else current_answer
         result = await score_correction(question, revised)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=describe_error(exc)) from exc
-    return {"revised_answer": revised, **result}
+    return {
+        "revised_answer": revised,
+        "feedback_specific": specific,
+        "changed": revised.strip() != current_answer.strip(),
+        **result,
+    }
 
 
 async def rescore(question: dict, answer: dict) -> dict:

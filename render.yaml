@@ -10,6 +10,8 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         value: openai/gpt-4o-mini
+      - key: REVISION_MODEL
+        value: anthropic/claude-sonnet-5.5
       - key: HINT_THRESHOLD
         value: "0.5"
       - key: PASS_THRESHOLD

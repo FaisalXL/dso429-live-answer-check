@@ -34,8 +34,10 @@ Open http://localhost:8001 in a browser.
 Copy `.env.example` to `.env`. Set these values:
 
 - `OPENROUTER_API_KEY`: Required. Jev, hints, and AI revisions all use it.
-- `OPENROUTER_MODEL`: The model for hints and AI revisions. Default:
-  `openai/gpt-4o-mini`.
+- `OPENROUTER_MODEL`: The model for hints. Default: `openai/gpt-4o-mini`.
+- `REVISION_MODEL`: The model that rewrites the AI's answer in fix-the-AI
+  questions. Default: `anthropic/claude-sonnet-5.5`. See "Fix-the-AI
+  rounds" before you change it.
 - `HINT_THRESHOLD`: The hint button unlocks below this Jev score.
   Default: 0.5.
 - `PASS_THRESHOLD`: A fix-the-AI question is solved when every mistake
@@ -71,11 +73,26 @@ and failed. It cut the score of a correct answer from 90% to 45%. See
 every 500ms. The server keeps only the newest text per question. It runs
 one Jev call at a time. Fast typing therefore never builds a backlog.
 
-**Fix-the-AI rounds.** The AI's instructions say to change only what the
-student's feedback addresses. Vague feedback such as "fix it" changes
-nothing. Without this rule, the AI fixes every mistake at once, and the
-question tests nothing. One Jev call scores the new answer and checks
-each planted mistake.
+**Fix-the-AI rounds.** Each round runs three steps:
+
+1. Jev decides whether the student's feedback names a specific claim.
+   If it does not, the answer stays unchanged and the student sees why.
+   Prompt rules alone did not stop the model from acting on "fix it."
+2. The revision model changes only the claims that the feedback
+   addresses. It applies wrong feedback too, so a wrong critique makes
+   the answer worse.
+3. One Jev call scores the new answer and checks each planted mistake.
+
+A round is solved when every mistake is fixed and the score reaches
+`PASS_THRESHOLD`. The server rejects an answer that the model cut off
+before the end. A cut-off answer drops the remaining wrong claims, and
+Jev would count those mistakes as fixed.
+
+`scratchpad/assignment_validation_test.py` tested three revision models.
+`gpt-4o-mini` left broken half-sentences. `claude-haiku-5.5` added ideas
+that the student did not give. `claude-sonnet-5.5` kept to the student's
+words and passed every check. Run that test again after you change the
+model.
 
 **Submission.** The server scores every final answer again on submit.
 The stored scores therefore do not depend on the browser. The server
