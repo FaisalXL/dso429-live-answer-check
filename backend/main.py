@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import json
 import os
 import re
@@ -7,11 +9,13 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
 ROOT_DIR = Path(__file__).parent.parent
@@ -38,6 +42,27 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 # Dev-only cosine-similarity readout, kept for comparison with Jev. Off by
 # default so the deployed build doesn't need PyTorch.
 DEV_COSINE = os.environ.get("DEV_COSINE", "false").lower() == "true"
+# Password for the instructor CSV export at /admin/export.csv. Unset means
+# the export is off.
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+# Submissions after this time are refused, e.g. 2026-11-22T23:59:00-08:00.
+# A time with no offset is Los Angeles time. A bad value stops the server
+# at startup, so a typo cannot go live.
+CLOSES_AT = os.environ.get("CLOSES_AT", "").strip()
+
+
+def parse_close_time(raw: str) -> datetime | None:
+    if not raw:
+        return None
+    moment = datetime.fromisoformat(raw)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+    return moment
+
+
+CLOSE_TIME = parse_close_time(CLOSES_AT)
+STUDENT_ID_PATTERN = os.environ.get("STUDENT_ID_PATTERN", r"^\d{10}$")
+STUDENT_ID_HINT = os.environ.get("STUDENT_ID_HINT", "your 10-digit USC ID")
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -131,10 +156,11 @@ def mistake_check(mistake: dict) -> dict:
             "Check one point in the AI's answer, and ignore every other part of it, "
             "including any other mistakes. Condition A: the answer does not make "
             f"this wrong claim anywhere: {mistake['error']} Mentioning the wrong "
-            "idea only to deny it is fine. Condition B: the answer states this "
-            f"correct idea, in any wording: {mistake['fix']} The answer does not "
-            "need to mention the wrong claim at all. Answer true only if both "
-            "conditions hold."
+            "idea only to deny it is fine. Condition B: the answer states the core "
+            f"of this correct idea, in any wording: {mistake['fix']} Reasons and "
+            "examples in that description are optional; the core claim is enough. "
+            "The answer does not need to mention the wrong claim at all. Answer "
+            "true only if both conditions hold."
         ),
         "criteria": {
             "true": "The wrong claim is gone and the correct idea is stated.",
@@ -298,6 +324,18 @@ async def revise_answer(question: dict, current_answer: str, feedback: str) -> s
     return choice["message"]["content"].strip().strip('"')
 
 
+def is_closed() -> bool:
+    return CLOSE_TIME is not None and datetime.now(timezone.utc) > CLOSE_TIME
+
+
+security = HTTPBasic()
+
+
+def require_admin(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+    if not ADMIN_KEY or not secrets.compare_digest(credentials.password.encode(), ADMIN_KEY.encode()):
+        raise HTTPException(status_code=401, detail="wrong password", headers={"WWW-Authenticate": "Basic"})
+
+
 def public_question(question: dict) -> dict:
     view = {k: question[k] for k in ("id", "type", "topic", "title", "prompt")}
     if question["type"] == "correction":
@@ -324,6 +362,10 @@ def get_assignment():
         "max_hints": MAX_HINTS,
         "session_id": secrets.token_hex(8),
         "demo_mode": DEMO_MODE,
+        "closes_at": CLOSE_TIME.isoformat() if CLOSE_TIME else None,
+        "closed": is_closed(),
+        "student_id_pattern": STUDENT_ID_PATTERN,
+        "student_id_hint": STUDENT_ID_HINT,
         "dev_cosine": DEV_COSINE,
     }
 
@@ -495,8 +537,12 @@ async def submit(payload: dict):
     student = payload.get("student") or {}
     name = str(student.get("name", "")).strip()
     student_id = str(student.get("id", "")).strip()
+    if is_closed():
+        raise HTTPException(status_code=403, detail="this assignment is closed")
     if not name or not student_id:
         raise HTTPException(status_code=400, detail="name and student ID are required")
+    if not re.fullmatch(STUDENT_ID_PATTERN, student_id):
+        raise HTTPException(status_code=400, detail=f"the student ID must be {STUDENT_ID_HINT}")
 
     answers = payload.get("answers") or {}
     feedback = payload.get("feedback") or {}
@@ -529,7 +575,12 @@ async def submit(payload: dict):
         "server_scores": server_scores,
     }
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    (SUBMISSIONS_DIR / f"{submission_id}.json").write_text(json.dumps(record, indent=2))
+    # Write to a temp file, then rename: a crash mid-write never leaves a
+    # half-written record.
+    target = SUBMISSIONS_DIR / f"{submission_id}.json"
+    tmp = target.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(record, indent=2))
+    tmp.replace(target)
     return {
         "ok": True,
         "submission_id": submission_id,
@@ -537,6 +588,58 @@ async def submit(payload: dict):
         "feedback_credits": feedback_credits,
         "record": record,
     }
+
+
+@app.get("/admin/export.csv")
+def export_csv(_: None = Depends(require_admin)):
+    """One row per submission, newest first. latest=yes marks each
+    student's most recent submission, the one to use for credit."""
+    records = []
+    for path in SUBMISSIONS_DIR.glob("*.json"):
+        try:
+            records.append(json.loads(path.read_text()))
+        except (OSError, json.JSONDecodeError):
+            continue
+    records.sort(key=lambda r: r["submitted_at"], reverse=True)
+    seen: set[str] = set()
+    columns = ["latest", "submitted_at", "name", "student_id", "feedback_credits",
+               "consent_claude_code_grading", "restarts"]
+    for i, q in enumerate(ASSIGNMENT["questions"], 1):
+        columns += [f"q{i}_feedback", f"q{i}_score", f"q{i}_answer"]
+        if q["type"] == "correction":
+            columns += [f"q{i}_solved", f"q{i}_rounds", f"q{i}_resets"]
+    columns.append("submission_id")
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=columns)
+    writer.writeheader()
+    for r in records:
+        sid = r["student"]["id"]
+        row = {
+            "latest": "yes" if sid not in seen else "no",
+            "submitted_at": r["submitted_at"], "name": r["student"]["name"], "student_id": sid,
+            "feedback_credits": r.get("feedback_credits", 0),
+            "consent_claude_code_grading": "yes" if r.get("consent_claude_code_grading") else "no",
+            "restarts": (r.get("client") or {}).get("restarts", 0),
+            "submission_id": r["submission_id"],
+        }
+        seen.add(sid)
+        for i, q in enumerate(ASSIGNMENT["questions"], 1):
+            answer = (r.get("answers") or {}).get(q["id"]) or {}
+            score = (r.get("server_scores") or {}).get(q["id"]) or {}
+            value = score.get("progress", score.get("score"))
+            row[f"q{i}_feedback"] = (r.get("feedback") or {}).get(q["id"], "")
+            row[f"q{i}_score"] = "" if value is None else round(value * 100)
+            row[f"q{i}_answer"] = answer.get("text") or answer.get("ai_answer") or ""
+            if q["type"] == "correction":
+                row[f"q{i}_solved"] = "yes" if score.get("solved") else "no"
+                row[f"q{i}_rounds"] = len(answer.get("rounds") or [])
+                row[f"q{i}_resets"] = answer.get("resets", 0)
+        writer.writerow(row)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
+    return Response(
+        content=out.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="live-answer-lab-{stamp}.csv"'},
+    )
 
 
 if DEV_COSINE:

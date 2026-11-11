@@ -15,8 +15,9 @@ After each question, a feedback box earns 1 credit for any non-empty
 answer. At the end, a checkbox asks if Claude Code may help grade the
 assignment. If the student leaves it unchecked, a person grades it by hand.
 
-**Status:** Working demo. The questions are placeholders about Pedalwise,
-a fictional bike-share company. Replace them in `backend/questions.json`.
+**Status:** Ready for an extra-credit run. The four questions are about
+Pedalwise, a fictional bike-share company. Edit them in
+`backend/questions.json`.
 
 ## Setup
 
@@ -47,6 +48,16 @@ Copy `.env.example` to `.env`. Set these values:
   Set it to `false` for real students. It exposes the answer key.
 - `DEV_COSINE`: `true` shows a cosine-similarity readout for comparison.
   Install `requirements-dev.txt` first. Default: `false`.
+- `ADMIN_KEY`: The password for the CSV export. Empty turns the export
+  off.
+- `CLOSES_AT`: The server refuses submissions after this time. Use the
+  form `2026-11-22T23:59:00-08:00`. A time with no offset is Los Angeles
+  time. A bad value stops the server at startup.
+- `STUDENT_ID_PATTERN`: A regular expression that each student ID must
+  match. Default: 10 digits.
+- `STUDENT_ID_HINT`: The ID format that error messages show.
+- `SUBMISSIONS_DIR`: The folder for submission records. Default:
+  `submissions/`.
 
 ## Writing questions
 
@@ -110,24 +121,36 @@ model.
 
 **Submission.** The server scores every final answer again on submit.
 The stored scores therefore do not depend on the browser. The server
-writes each record to `submissions/<student-id>_<time>.json`. The
-student can also download a copy.
+writes each record to `SUBMISSIONS_DIR/<student-id>_<time>.json`. The
+student can also download a copy. The server refuses a submission after
+`CLOSES_AT`, or one with an ID that does not match `STUDENT_ID_PATTERN`.
+
+**Export.** Open `/admin/export.csv`. Enter any user name and the
+`ADMIN_KEY` password. The CSV has one row per submission, newest first.
+A student can submit more than once. The `latest` column marks each
+student's newest row. Grade only the rows where `latest` is `yes`.
 
 ## Deployment
 
-`render.yaml` defines a free-tier web service on Render. Create a
-Blueprint from this repo. Enter `OPENROUTER_API_KEY` in the Render
-dashboard; the repo does not store it.
+`render.yaml` defines a web service on Render's Starter plan, with a
+1 GB disk at `/var/data`. Submissions stay on that disk through restarts
+and deploys. The free plan has no disk, so it would lose submissions.
+
+1. Create a Blueprint from this repo, or set the plan and disk by hand
+   on an existing service.
+2. In the dashboard, set `OPENROUTER_API_KEY`, `ADMIN_KEY`, and
+   `CLOSES_AT`. The repo does not store them.
+3. Make sure that `DEMO_MODE` is `false`.
+4. Deploy. Then run the validation test against the live site:
+   `BASE_URL=https://<your-service>.onrender.com python scratchpad/assignment_validation_test.py`
 
 The deployed build does not include PyTorch, so it needs little memory.
+Download the CSV after the close time, then cancel the plan.
 
 ## Known limitations
 
-- **Storage.** Render's free tier deletes local files on each restart.
-  Submissions saved there are lost. Use a database or the downloaded
-  copies before real use.
-- **Identity.** Students type their own name and ID. The app does not
-  check them.
+- **Identity.** Students type their own name and ID. The server checks
+  only the ID format.
 - **Round limit.** The browser enforces the round limit. "Start this
   question over" gives the rounds back. The record counts every reset
   and every full restart, so a grader can see them.

@@ -297,9 +297,12 @@ const locked = () => !!S.submitted;
 
 // ---------- state ----------
 function freshAnswer(q) {
+  // `for` ties saved work to the exact question, so an edited question
+  // starts fresh instead of loading work done on a different one.
+  const forQ = `${q.type}|${q.prompt}|${q.seed_answer || ''}`;
   return q.type === 'live'
-    ? { text: '', score: null, hints: [] }
-    : { ai_answer: q.seed_answer, previous_answer: null, score: null, fixed: null, fixed_count: null, solved: false, rounds: [], draft: '', notice: null };
+    ? { for: forQ, text: '', score: null, hints: [] }
+    : { for: forQ, ai_answer: q.seed_answer, previous_answer: null, score: null, fixed: null, fixed_count: null, solved: false, rounds: [], draft: '', notice: null };
 }
 function freshState() {
   const answers = {}, feedback = {};
@@ -308,8 +311,14 @@ function freshState() {
 }
 function reconcileState(saved) {
   if (!saved || saved.version !== 3) return freshState();
+  saved.resets = saved.resets || {};
   for (const q of A.questions) {
-    if (!saved.answers[q.id]) saved.answers[q.id] = freshAnswer(q);
+    const fresh = freshAnswer(q);
+    if (!saved.answers[q.id] || saved.answers[q.id].for !== fresh.for) {
+      saved.answers[q.id] = fresh;
+      saved.feedback[q.id] = '';
+      saved.resets[q.id] = 0;
+    }
     if (saved.feedback[q.id] == null) saved.feedback[q.id] = '';
   }
   return saved;
@@ -445,11 +454,13 @@ function renderStrip() {
     return el('a', { class: `tab ${cls}`, href: `#${q.id}`, 'aria-label': `Question ${i + 1}`, text: String(i + 1) });
   });
   tabs.push(el('a', { class: 'tab', href: '#submit', text: 'Submit' }));
-  tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Start over', onclick: () => {
-    if (!confirm('Clear every answer and start the whole assignment over? Your name and ID stay.')) return;
-    const keep = { student: S.student, restarts: (S.restarts || 0) + 1 };
-    S = Object.assign(freshState(), keep); saveState(); renderPage(); window.scrollTo({ top: 0 });
-  } }));
+  if (A.demo_mode) {
+    tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Start over', onclick: () => {
+      if (!confirm('Clear every answer and start the whole assignment over? Your name and ID stay.')) return;
+      const keep = { student: S.student, restarts: (S.restarts || 0) + 1 };
+      S = Object.assign(freshState(), keep); saveState(); renderPage(); window.scrollTo({ top: 0 });
+    } }));
+  }
   document.getElementById('tabs').replaceChildren(...tabs);
 }
 
@@ -464,8 +475,10 @@ function buildIntro() {
     el('div', {},
       el('div', { class: 'eyebrow', text: A.subtitle }),
       el('h1', { text: A.title }),
-      el('p', { class: 'lede', text: `${A.company_note} Your work saves in this browser as you go.` }),
+      el('p', { class: 'lede', text: `${A.company_note} Your feedback on each question counts most. Your work saves in this browser as you go.` }),
+      A.closes_at ? el('p', { class: 'small muted', style: 'margin:8px 0 0', text: `Closes ${new Date(A.closes_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.` }) : null,
     ),
+    A.closed ? el('div', { class: 'notice warn', text: 'This assignment is closed. You can still look around, but you can no longer submit.' }) : null,
     el('dl', { class: 'howto' },
       el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Jev, an AI grader, scores your answer as you type. Low score? Ask for a hint.' })),
       el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answer has planted mistakes. Point them out; the AI fixes only what you name.' })),
@@ -474,7 +487,8 @@ function buildIntro() {
     ),
     el('div', { class: 'fields' },
       el('div', {}, el('label', { class: 'field', for: 'student-name', text: 'Full name' }), name),
-      el('div', {}, el('label', { class: 'field', for: 'student-id', text: 'Student ID' }), sid),
+      el('div', {}, el('label', { class: 'field', for: 'student-id', text: 'Student ID' }), sid,
+        el('div', { class: 'small muted', style: 'margin-top:6px', text: `Use ${A.student_id_hint}.` })),
     ),
   );
 }
@@ -494,7 +508,7 @@ function fillQuestion(q) {
     ),
   );
   // Resetting also gives back the rounds, so each reset is recorded for graders.
-  const restart = el('button', { class: 'btn ghost small-btn', type: 'button', text: 'Start this question over', disabled: locked(), onclick: () => {
+  const restart = q.type !== 'correction' ? null : el('button', { class: 'btn ghost small-btn', type: 'button', text: 'Start this question over', disabled: locked(), onclick: () => {
     if (!confirm('Clear your work on this question and start it over? Your feedback stays.')) return;
     S.answers[q.id] = freshAnswer(q);
     S.resets[q.id] = (S.resets[q.id] || 0) + 1;
@@ -505,7 +519,7 @@ function fillQuestion(q) {
     el('p', { class: 'prompt', text: q.prompt }),
     answerKey(q),
     q.type === 'live' ? liveBody(q) : fixBody(q),
-    el('div', { class: 'row', style: 'justify-content:flex-end' }, restart),
+    restart && el('div', { class: 'row', style: 'justify-content:flex-end' }, restart),
     feedbackBlock(q),
   );
 }
@@ -655,9 +669,10 @@ function fillSubmit() {
   if (!s) return;
   if (S.submitted) { s.replaceChildren(...receipt()); return; }
   const missing = A.questions.map((q, i) => ({ q, i })).filter(({ q }) => !hasFeedback(q));
-  const named = S.student.name && S.student.id;
+  const idOk = new RegExp(A.student_id_pattern).test(S.student.id || '');
+  const named = S.student.name && S.student.id && idOk;
   const items = [
-    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : 'Missing' })),
+    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : S.student.id && !idOk ? 'Check your ID' : 'Missing' })),
     ...A.questions.map((q, i) => {
       const a = S.answers[q.id];
       const work = q.type === 'live'
@@ -672,7 +687,7 @@ function fillSubmit() {
   consent.checked = S.consent;
   consent.addEventListener('change', () => { S.consent = consent.checked; saveState(); });
   const submit = el('button', { class: 'btn', type: 'button', text: 'Submit assignment' });
-  submit.disabled = !named || missing.length > 0;
+  submit.disabled = A.closed || !named || missing.length > 0;
   const errorBox = el('div');
   submit.addEventListener('click', async () => {
     submit.disabled = true; submit.textContent = 'Submitting…';
@@ -700,7 +715,7 @@ function fillSubmit() {
         'A TA reviews every grade. Unchecked means graded by hand.')),
     errorBox,
     el('div', { class: 'row' },
-      el('span', { class: 'small muted', text: missing.length ? `Feedback missing on ${plural(missing.length, 'question')}.` : named ? '' : 'Add your name and ID at the top.' }),
+      el('span', { class: 'small muted', text: A.closed ? 'This assignment is closed.' : missing.length ? `Feedback missing on ${plural(missing.length, 'question')}.` : named ? '' : S.student.id && !idOk ? `Student ID must be ${A.student_id_hint}.` : 'Add your name and ID at the top.' }),
       submit),
   );
 }

@@ -27,28 +27,23 @@ LIVE_CASES = {
         ("wrong: agrees with team", "low", "B is the winner because 8% more taps means riders are more engaged with the app, and engagement always leads to revenue eventually."),
     ],
     "q2": [
-        ("correct", "high", "The coefficients are in utility units, not dollars, so 0.60 isn't 60 cents. To convert to dollars, divide by the size of the price coefficient: 0.60 / 0.03 = $20. Customers are willing to pay about $20 a month for e-bike access."),
-        ("wrong: multiplies", "low", "The manager forgot to use the price coefficient. Willingness to pay is 0.60 times 0.03, which is $0.018, so e-bike access is worth almost nothing."),
-        ("partial: no number", "low", "The manager is wrong because logit coefficients are measured in utility, not dollars, so you can't read 0.60 as 60 cents."),
-    ],
-    "q4": [
-        ("correct", "high", "This is overfitting: the model memorized the training data, including noise, so it doesn't generalize. The 71% held-out score is the real estimate. They should simplify the model or add regularization, and pick the complexity with a validation set."),
-        ("wrong: underfitting", "low", "The model is underfitting, so the team should make it more complex by adding more features and deeper trees until the held-out accuracy catches up."),
-        ("partial: no remedy", "low", "The model is overfitting. It does great on data it has seen and badly on new data."),
+        ("correct", "high", "After epoch 20 the model is overfitting: it keeps fitting the training data better, including its noise, but gets worse on new data, which is why validation loss rises. Pedalwise should keep the version from around epoch 20, where validation loss was lowest, and stop training there."),
+        ("partial: no version choice", "low", "After epoch 20 the model is overfitting the training data, so it gets worse on new data."),
+        ("wrong: underfitting, keep final", "low", "The model is underfitting after epoch 20, so Pedalwise should keep training and use the final epoch-50 model, since its training loss is lowest."),
     ],
 }
 
 CORRECTION_SCRIPTS = [
     ("q3", "step by step", [
-        ("vague", "This answer is wrong, fix it."),
-        ("one mistake (m1)", "It doesn't look answers up in a database. A language model writes its answer by predicting the most likely next words, based on patterns it learned in training."),
-        ("remaining (m2, m3)", "It doesn't automatically know Pedalwise's current prices or rules; that information has to be given to it, for example in its instructions or in documents it can search. And it can make things up: it can confidently state a wrong price or rule, which is called a hallucination."),
+        ("vague", "This plan is wrong, fix it."),
+        ("one mistake (m1)", "Showing one page in the mornings and the other in the afternoons isn't fair, because morning and afternoon visitors can be different people. Each visitor should be randomly assigned to one of the two pages."),
+        ("remaining (m2, m3)", "Stopping as soon as the new page is ahead is wrong: checking every day and stopping at the first lead makes false wins more likely, so decide the number of visitors in advance and check once at the end. And 30 visitors per page is not enough; with so few people the difference is mostly noise, so you need enough visitors and a significance test before picking a winner."),
     ]),
     ("q3", "wrong critique", [
-        ("wrong", "The part about the database is wrong: the chatbot actually has a human operator who types every answer in real time."),
+        ("wrong", "The morning and afternoon idea is wrong because the test should only run on weekends, when the most people sign up."),
     ]),
-    ("q5", "one round", [
-        ("all three", "The contract can't see the physical world. It needs an outside data source, an oracle, such as the dock reporting the return. Because of that, it can refund or keep a deposit wrongly if the dock data is faulty or tampered with, even if the code is correct. And deployed contract code generally can't be edited like an app; changing the rules means deploying a new contract or using an upgrade mechanism planned in advance."),
+    ("q4", "one round", [
+        ("all three", "Closed tickets aren't the same as solved problems, so the reward is only a stand-in for what Pedalwise wants. The agent learns whatever earns reward, so it can learn to close tickets without solving them, which is reward hacking. Pedalwise should also watch a guard metric like how often tickets get reopened, and change the reward, for example by subtracting points for reopened tickets."),
     ]),
 ]
 

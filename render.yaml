@@ -2,12 +2,24 @@ services:
   - type: web
     name: dso429-live-answer-check
     runtime: python
-    plan: free
+    # A persistent disk needs a paid plan. Free-tier storage is wiped on
+    # every restart, which would lose submissions.
+    plan: starter
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+    disk:
+      name: submissions
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: CLOSES_AT
+        sync: false
+      - key: SUBMISSIONS_DIR
+        value: /var/data/submissions
       - key: OPENROUTER_MODEL
         value: openai/gpt-4o-mini
       - key: REVISION_MODEL
@@ -19,4 +31,4 @@ services:
       - key: MAX_HINTS
         value: "3"
       - key: DEMO_MODE
-        value: "true"
+        value: "false"

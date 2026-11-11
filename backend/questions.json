@@ -1,6 +1,6 @@
 {
   "title": "Live Answer Lab",
-  "subtitle": "Demo assignment",
+  "subtitle": "Extra credit",
   "company_note": "Every question is about Pedalwise, a made-up bike-share company.",
   "questions": [
     {
@@ -21,46 +21,46 @@
     {
       "id": "q2",
       "type": "live",
-      "topic": "Choice models",
-      "title": "Read the coefficients",
-      "prompt": "Pedalwise fits a logit model to customers' choices between membership plans. The coefficient on 'includes e-bikes' is 0.60, and the coefficient on monthly price is -0.03 per dollar. A manager says, 'So customers value e-bike access at 60 cents.' Explain the manager's mistake and work out what customers are actually willing to pay for e-bike access.",
-      "reference_answer": "Logit coefficients are in units of utility, not dollars, so 0.60 cannot be read as 60 cents. The price coefficient converts utility into dollars: each extra dollar of monthly price lowers utility by 0.03. Willingness to pay for a feature is its coefficient divided by the size of the price coefficient: 0.60 / 0.03 = $20 per month. So customers value e-bike access at about $20 a month.",
+      "topic": "Neural networks",
+      "title": "Read the training curve",
+      "prompt": "Pedalwise trains a neural network to predict how many bikes each station will need tomorrow. Over 50 rounds of training (epochs), the training loss keeps going down the whole time. The validation loss goes down until epoch 20 and then starts going back up. Explain what is happening after epoch 20, and say which version of the model Pedalwise should keep.",
+      "reference_answer": "After epoch 20 the model is overfitting: it keeps getting better on the training data by memorizing its noise and quirks, but it gets worse on new data, which is what the rising validation loss shows. The validation loss is the honest measure of how the model will do in practice. Pedalwise should keep the model from around epoch 20, where validation loss was lowest, and stop training there (early stopping). It could also add regularization or more data so the model overfits less.",
       "jev": {
-        "instructions": "Does the student's answer correctly explain (1) that logit coefficients are measured in utility, not dollars, so 0.60 is not 60 cents, and (2) that willingness to pay is the feature coefficient divided by the absolute value of the price coefficient, which gives 0.60 / 0.03 = $20 per month? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
+        "instructions": "Does the student's answer correctly explain (1) that after epoch 20 the model is overfitting, getting better on the training data while getting worse on new data, which the rising validation loss shows, and (2) that Pedalwise should keep the model from around epoch 20, where validation loss was lowest (early stopping), rather than the final model? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
         "criteria": {
-          "true": "Identifies the utility-versus-dollars mistake and reaches about $20 per month by dividing by the price coefficient, or is clearly heading toward both.",
-          "false": "Accepts 60 cents, reaches a willingness to pay other than about $20 per month, uses the wrong formula, covers only one of the two ideas, or is just keywords."
+          "true": "Identifies overfitting after epoch 20 and says to keep the model from around epoch 20, where validation loss was lowest, or is clearly heading toward both.",
+          "false": "Gives a wrong diagnosis (for example underfitting, or that training should continue), keeps the final epoch-50 model, covers only one of the two ideas, or is just keywords."
         }
       }
     },
     {
       "id": "q3",
       "type": "correction",
-      "topic": "AI chatbots",
-      "title": "Fix the AI's chatbot explanation",
-      "prompt": "Pedalwise wants to add an AI chatbot, built on a large language model, to answer riders' questions about prices and rules. Explain in plain terms how the chatbot produces its answers, and what it can and cannot be trusted to do.",
-      "reference_answer": "A large language model writes its answer one word at a time, predicting the text most likely to come next from patterns it learned in training. It does not look answers up in a database. It does not know Pedalwise's current prices or rules unless that information is given to it, for example in its instructions or in documents it can search. Because it predicts plausible text, it can state wrong information confidently, such as a made-up price or rule; this is called a hallucination. So Pedalwise should give it the official prices and rules, test it, and send questions it can't answer reliably to a person.",
-      "seed_answer": "The chatbot works by looking up the correct answer in a giant database of facts, the same way a search engine does. Because it was trained on the whole internet, it automatically knows Pedalwise's current prices and rules. Since it is a computer program, it never makes things up: if it does not know something, it always says so.",
+      "topic": "A/B testing",
+      "title": "Fix the AI's test plan",
+      "prompt": "Pedalwise wants to know whether a new sign-up page gets more people to become members than the current page. Explain how Pedalwise should run a fair A/B test to find out.",
+      "reference_answer": "Pedalwise should randomly assign each visitor to the new page or the current page, so the two groups are alike in every other way and any difference comes from the page itself. It should decide in advance how many visitors it needs and check the result once at the end, instead of stopping as soon as one page is ahead, because checking repeatedly and stopping at the first good-looking result makes false wins much more likely. And it needs enough visitors: with only a few dozen people per page, differences are mostly random noise, so it needs a large enough sample and a significance test before declaring a winner.",
+      "seed_answer": "Pedalwise should show the new page every morning and the current page every afternoon, then compare how many people sign up on each. It should check the results every day and stop the test as soon as the new page is ahead, because that proves the new page is better. About 30 visitors per page is plenty, since any difference in sign-ups between the pages is real.",
       "mistakes": [
         {
           "id": "m1",
-          "error": "The chatbot looks up answers in a database of facts, like a search engine.",
-          "fix": "It writes its answer by predicting likely next words from patterns it learned in training."
+          "error": "Show the new page in the mornings and the current page in the afternoons.",
+          "fix": "Each visitor is randomly assigned to one of the two pages."
         },
         {
           "id": "m2",
-          "error": "The chatbot automatically knows Pedalwise's current prices and rules from its training.",
-          "fix": "It only knows Pedalwise's prices and rules if that information is given to it, for example in its instructions or in documents it can search."
+          "error": "Check the results every day and stop as soon as the new page is ahead, since that proves it is better.",
+          "fix": "Decide the number of visitors in advance and check the result once at the end, instead of stopping as soon as one page is ahead."
         },
         {
           "id": "m3",
-          "error": "The chatbot never makes things up and always says when it does not know.",
-          "fix": "It can state wrong information confidently, for example a made-up price or rule (a hallucination)."
+          "error": "About 30 visitors per page is plenty, since any difference in sign-ups is real.",
+          "fix": "A few dozen visitors is not enough; the test needs enough visitors and a significance test before declaring a winner."
         }
       ],
       "max_rounds": 5,
       "jev": {
-        "instructions": "Is the AI's answer fully correct? It must explain that the chatbot produces answers by predicting likely text from patterns learned in training rather than looking them up, that it only knows Pedalwise's prices and rules if they are given to it, and that it can state wrong information confidently. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "instructions": "Is the AI's answer fully correct? It must say to randomly assign visitors to the two pages, to decide the sample size in advance and not stop as soon as one page is ahead, and to use enough visitors and a significance test before declaring a winner. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
         "criteria": {
           "true": "Every claim is correct and all three points are covered.",
           "false": "Contains at least one false claim, or leaves out one of the three points."
@@ -69,50 +69,35 @@
     },
     {
       "id": "q4",
-      "type": "live",
-      "topic": "Supervised learning",
-      "title": "Read the train/test gap",
-      "prompt": "Pedalwise trains a model to predict which docking stations will run out of bikes in the next hour. The model is 99% accurate on its training data but only 71% accurate on held-out data it never saw. Explain what this gap means and one thing the team could do about it.",
-      "reference_answer": "The gap means the model is overfitting: it has memorized patterns and noise that are specific to the training data instead of learning patterns that carry over to new stations and hours. The 99% training score overstates how good it is; the 71% held-out score is the honest estimate of how it will do in practice. The team could use a simpler model with fewer features or shallower trees, add regularization, collect more training data, or choose the model's complexity using a validation set or cross-validation, keeping the test set untouched until the final check.",
-      "jev": {
-        "instructions": "Does the student's answer correctly explain (1) that the gap means overfitting, so the model fits the training data, including its noise, too closely and does not generalize, which makes the held-out score the honest estimate, and (2) at least one valid remedy, such as a simpler model, regularization, more training data, or choosing complexity with a validation set or cross-validation? Any wording is fine. An answer covering only one of the two ideas is incomplete. The student may still be mid-answer; judge based on what has been written so far.",
-        "criteria": {
-          "true": "Identifies overfitting (or memorizing the training data) and gives at least one valid remedy, or is clearly heading toward both.",
-          "false": "Gives a wrong diagnosis (for example underfitting, or blaming the held-out data), gives no valid remedy, suggests a remedy that makes overfitting worse such as a more complex model, or is just keywords."
-        }
-      }
-    },
-    {
-      "id": "q5",
       "type": "correction",
-      "topic": "Smart contracts",
-      "title": "Fix the AI's smart contract",
-      "prompt": "Pedalwise wants to hold each rider's $50 bike deposit in a smart contract and refund it automatically when the bike is returned to a station. Explain how this would work and describe one real limitation.",
-      "reference_answer": "When a rental starts, the smart contract takes the $50 deposit and holds it. The contract cannot see the physical world, so it relies on an outside data source, called an oracle: here, the docking station reporting that the bike was returned. When the oracle reports a return within the rental window, the contract automatically refunds the deposit to the rider with no staff involved; if no return is reported in time, the contract keeps the deposit. The rule is enforced by code, so riders do not have to trust Pedalwise to issue refunds. A real limitation is that the contract is only as reliable as the oracle: if a dock is faulty, offline, or tampered with, the contract refunds or keeps deposits wrongly even though its own code ran correctly. Another is that deployed contract code generally cannot be edited, so changing the rules means deploying a new contract or using an upgrade mechanism planned in advance.",
-      "seed_answer": "When a rental starts, the smart contract takes the rider's $50 deposit and holds it. Because the contract runs on the blockchain, it can detect by itself when the bike is docked at a station, so no outside data is needed. When it sees the bike return, it refunds the deposit automatically. Since the refund rule is written in code, it can never refund the wrong rider or keep a deposit by mistake. If Pedalwise later wants to change the deposit amount or the rental window, it can simply edit the deployed contract, just like updating a normal app.",
+      "topic": "Reinforcement learning",
+      "title": "Fix the AI's reward plan",
+      "prompt": "Pedalwise trains an AI support agent with reinforcement learning. The agent gets a reward of +1 every time it closes a rider's support ticket. Explain what could go wrong with this reward and what Pedalwise should do about it.",
+      "reference_answer": "Closed tickets are only a stand-in for what Pedalwise wants, which is riders whose problems are actually solved. An agent trained to maximize this reward can learn to close tickets without solving them, for example by closing a ticket as soon as the rider goes quiet. This is called reward hacking: the reward goes up while the real goal does not. Pedalwise should watch a guard metric that would reveal the problem, such as how often closed tickets get reopened or riders contact support again, and change the reward so hacking does not pay, for example by subtracting points when a ticket is reopened.",
+      "seed_answer": "Rewarding the agent for every closed ticket is a good plan, because more closed tickets always means happier riders. The agent will only close a ticket once the rider's problem is truly solved, since it understands what Pedalwise is trying to achieve. And because the reward keeps going up as the agent improves, Pedalwise only needs to watch that one number; there is nothing else to check.",
       "mistakes": [
         {
           "id": "m1",
-          "error": "The smart contract can detect the bike's return by itself, so no outside data is needed.",
-          "fix": "The contract cannot see the physical world; it relies on an outside data source (an oracle), such as the dock reporting the return."
+          "error": "More closed tickets always means happier riders, so the reward measures what Pedalwise wants.",
+          "fix": "Closed tickets are only a stand-in for solved problems; tickets can be closed without the rider's problem being solved."
         },
         {
           "id": "m2",
-          "error": "Because the rule is written in code, the contract can never refund or keep a deposit by mistake.",
-          "fix": "If the outside data is faulty or tampered with, the contract can refund or keep a deposit wrongly even though its code is correct."
+          "error": "The agent will only close a ticket once the problem is truly solved, because it understands Pedalwise's goal.",
+          "fix": "The agent learns whatever earns reward, so it can learn to close tickets without solving them (reward hacking)."
         },
         {
           "id": "m3",
-          "error": "Pedalwise can simply edit the deployed contract, like updating a normal app.",
-          "fix": "Deployed contract code generally cannot be edited; changing the rules means deploying a new contract or using an upgrade mechanism planned in advance."
+          "error": "Pedalwise only needs to watch the reward number; there is nothing else to check.",
+          "fix": "Pedalwise should track a guard metric such as how often tickets are reopened, and change the reward, for example by subtracting points for reopened tickets."
         }
       ],
       "max_rounds": 5,
       "jev": {
-        "instructions": "Is the AI's answer fully correct? It must explain that the contract holds the deposit and refunds it automatically based on a return reported by an outside data source (an oracle), and describe a real limitation, such as dependence on that data source or deployed code being hard to change. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "instructions": "Is the AI's answer fully correct? It must explain that closed tickets are only a stand-in for solved problems, that the agent can learn to close tickets without solving them (reward hacking), and that Pedalwise should watch a guard metric such as reopened tickets and change the reward. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
         "criteria": {
-          "true": "Every claim is correct, the mechanism relies on an outside data source, and a real limitation is described.",
-          "false": "Contains at least one false claim, or leaves out the outside data source or the limitation."
+          "true": "Every claim is correct and all three points are covered.",
+          "false": "Contains at least one false claim, or leaves out one of the three points."
         }
       }
     }
