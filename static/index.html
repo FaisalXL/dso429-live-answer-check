@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Close Enough? · DSO 429</title>
+<title>DSO 429 · Extra credit assignment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" />
@@ -139,6 +139,7 @@
     font-size: 14px; color: var(--ink-2);
   }
   .cover-head strong { color: var(--ink); font-weight: 600; }
+  .cover-head .cover-title { margin: 0; font: inherit; letter-spacing: normal; }
   h1 { font: 600 clamp(2.2rem, 6vw, 3rem)/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
   .lede { margin: 20px 0 0; max-width: 60ch; color: var(--ink-2); font: 400 1.1rem/1.6 var(--font-display); }
   .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 36px; }
@@ -281,7 +282,7 @@
 <body>
 <div class="strip">
   <div class="strip-inner">
-    <div class="brand" id="brand">DSO 429 · Close Enough?</div>
+    <div class="brand" id="brand">DSO 429 · Extra credit assignment</div>
     <span class="conn" title="Connection for live scoring"><span class="conn-dot" id="connDot"></span><span id="connText">Connecting…</span></span>
     <span class="progress-text" id="progressText"></span>
     <nav class="tabs" id="tabs" aria-label="Questions"></nav>
@@ -491,8 +492,8 @@ function renderPage() {
 }
 
 function renderStrip() {
-  document.getElementById('brand').textContent = `DSO 429 · ${A.title}`;
-  document.title = `${A.title} · DSO 429`;
+  document.getElementById('brand').textContent = `DSO 429 · ${A.subtitle}`;
+  document.title = `DSO 429 · ${A.subtitle}`;
   const n = A.questions.length;
   const started = A.questions.filter(isStarted).length;
   const fb = A.questions.filter(hasFeedback).length;
@@ -532,9 +533,8 @@ function buildIntro() {
   updateCover();
   return el('section', { class: 'cover' },
     el('div', { class: 'cover-head' },
-      el('span', {}, el('strong', { text: 'DSO 429' }), ` · ${A.subtitle}`),
+      el('h1', { class: 'cover-title' }, el('strong', { text: 'DSO 429' }), ` · ${A.subtitle}`),
       el('span', { text: [`${A.questions.length} questions`, plPoints(qPoints + fbPoints), closes && `closes ${closes}`].filter(Boolean).join(' · ') })),
-    el('h1', { text: A.title }),
     A.closed ? el('div', { class: 'notice warn', text: 'This quiz is closed. You can still look around, but you can no longer submit.' }) : null,
     el('div', { class: 'fields' },
       el('div', { class: 'blank' }, el('label', { for: 'student-name', text: 'Name' }), name),
@@ -746,7 +746,7 @@ function fixBody(q) {
 }
 
 function feedbackBlock(q) {
-  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Clear or confusing? Too easy or too hard? Did the score feel fair?', disabled: locked() });
+  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, disabled: locked() });
   box.value = S.feedback[q.id];
   box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); renderStrip(); fillSubmit(); });
   return el('div', { class: 'feedback' },
