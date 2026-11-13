@@ -728,6 +728,7 @@ function fillSubmit() {
   });
   s.replaceChildren(
     el('h2', { id: 'submit-title', text: 'Submit' }),
+    S.lastSubmissionId ? el('div', { class: 'notice ok', text: `You submitted before (ID ${S.lastSubmissionId}). Submitting again replaces it for grading.` }) : null,
     el('ul', { class: 'checklist' }, items),
     el('label', { class: 'consent', for: 'consent' }, consent,
       el('span', {}, el('strong', { text: 'Claude Code may help grade my work. ' }),
@@ -758,12 +759,20 @@ function receipt() {
     const link = el('a', { href: URL.createObjectURL(blob), download: `${d.submission_id}.json` });
     document.body.appendChild(link); link.click(); link.remove();
   });
+  // The server keeps every submission and grades the latest one, so a
+  // student can reopen their work until the close time.
+  const edit = A.closed ? null : el('button', { class: 'btn', type: 'button', text: 'Edit and submit again', onclick: () => {
+    if (!confirm('Reopen your work? Your answers stay. Submit again before the close time; we grade your latest submission.')) return;
+    S.lastSubmissionId = d.submission_id; S.submitted = null;
+    saveState(); renderPage();
+    document.getElementById('submit').scrollIntoView({ block: 'start' });
+  } });
   return [
     el('h2', { id: 'submit-title', text: 'Submitted' }),
     el('p', { class: 'muted', style: 'margin:0' }, 'ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
     el('div', { style: 'overflow-x:auto' }, el('table', { class: 'receipt' }, el('tbody', {}, rows))),
-    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${d.feedback_total || A.questions.length + 1}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.` }),
-    el('div', { class: 'row' }, download),
+    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${d.feedback_total || A.questions.length + 1}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.${A.closed ? '' : ' You can still change your work and submit again. We grade your latest submission.'}` }),
+    el('div', { class: 'row' }, download, edit),
   ];
 }
 
