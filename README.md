@@ -1,4 +1,4 @@
-# Live Answer Lab
+# Close Enough?
 
 An assignment with two question types. Jev, a decision model from
 TypeSafe, scores each answer while the student works.

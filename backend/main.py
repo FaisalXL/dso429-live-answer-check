@@ -695,7 +695,7 @@ def export_csv(_: None = Depends(require_admin)):
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
     return Response(
         content=out.getvalue(), media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="live-answer-lab-{stamp}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="close-enough-{stamp}.csv"'},
     )
 
 

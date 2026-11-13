@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Live Answer Lab</title>
+<title>Close Enough? · DSO 429</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" />
@@ -140,7 +140,7 @@
   }
   .cover-head strong { color: var(--ink); font-weight: 600; }
   h1 { font: 600 clamp(2.2rem, 6vw, 3rem)/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
-  .lede { margin: 10px 0 0; max-width: 60ch; color: var(--ink-2); font: 400 1.1rem/1.6 var(--font-display); }
+  .lede { margin: 20px 0 0; max-width: 60ch; color: var(--ink-2); font: 400 1.1rem/1.6 var(--font-display); }
   .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 36px; }
   .blank { display: flex; align-items: baseline; gap: 10px; }
   .blank label { font-weight: 600; white-space: nowrap; }
@@ -281,7 +281,7 @@
 <body>
 <div class="strip">
   <div class="strip-inner">
-    <div class="brand" id="brand">DSO 429 · Live Answer Lab</div>
+    <div class="brand" id="brand">DSO 429 · Close Enough?</div>
     <span class="conn" title="Connection for live scoring"><span class="conn-dot" id="connDot"></span><span id="connText">Connecting…</span></span>
     <span class="progress-text" id="progressText"></span>
     <nav class="tabs" id="tabs" aria-label="Questions"></nav>
@@ -492,7 +492,7 @@ function renderPage() {
 
 function renderStrip() {
   document.getElementById('brand').textContent = `DSO 429 · ${A.title}`;
-  document.title = A.title;
+  document.title = `${A.title} · DSO 429`;
   const n = A.questions.length;
   const started = A.questions.filter(isStarted).length;
   const fb = A.questions.filter(hasFeedback).length;
@@ -534,9 +534,7 @@ function buildIntro() {
     el('div', { class: 'cover-head' },
       el('span', {}, el('strong', { text: 'DSO 429' }), ` · ${A.subtitle}`),
       el('span', { text: [`${A.questions.length} questions`, plPoints(qPoints + fbPoints), closes && `closes ${closes}`].filter(Boolean).join(' · ') })),
-    el('div', {},
-      el('h1', { text: A.title }),
-      el('p', { class: 'lede', text: A.company_note })),
+    el('h1', { text: A.title }),
     A.closed ? el('div', { class: 'notice warn', text: 'This quiz is closed. You can still look around, but you can no longer submit.' }) : null,
     el('div', { class: 'fields' },
       el('div', { class: 'blank' }, el('label', { for: 'student-name', text: 'Name' }), name),
@@ -548,8 +546,7 @@ function buildIntro() {
       el('ol', {},
         el('li', { text: `${listNums(nums('live'))}: type your answer. As you type, Jev, an AI model, tells you how close you are to the answer. If you are far off, you can ask for a hint.` }),
         el('li', { text: `${listNums(nums('correction'))}: an AI wrote an answer with mistakes in it. Tell the AI which claim is wrong and why. It fixes only what you explain.` }),
-        el('li', { text: `Each question is worth ${each.length === 1 ? plPoints(each[0]) : 'the points shown'}. After each question, tell us what you thought of it, for ${plPoints(A.feedback_points)}. We care most about this feedback.` }),
-        el('li', { text: 'You can skip anything. Your work saves in this browser, and you can submit again until the deadline.' }))),
+        el('li', { text: `Each question is worth ${each.length === 1 ? plPoints(each[0]) : 'the points shown'}. After each question, tell us what you thought of it, for ${plPoints(A.feedback_points)}. We care most about this feedback.` }))),
     el('div', {},
       el('h2', { class: 'contents-title', text: 'Questions' }),
       el('div', { style: 'overflow-x:auto' }, el('table', { class: 'contents' },
@@ -559,7 +556,8 @@ function buildIntro() {
         coverBody,
         el('tfoot', {}, el('tr', { class: 'total' },
           el('td', {}), el('td', { text: 'Total' }), el('td', { class: 'fmt' }), el('td', {}),
-          el('td', { class: 'pts', text: String(qPoints) }), el('td', { class: 'fb', text: `${fbPoints}` })))))),
+          el('td', { class: 'pts', text: String(qPoints) }), el('td', { class: 'fb', text: `${fbPoints}` }))))),
+      el('p', { class: 'lede', text: A.company_note })),
   );
 }
 function updateCover() {
