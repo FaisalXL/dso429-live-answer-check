@@ -525,7 +525,6 @@ function buildIntro() {
   const onEdit = () => { S.student = { name: name.value.trim(), email: email.value.trim() }; saveState(); fillSubmit(); };
   name.addEventListener('input', onEdit); email.addEventListener('input', onEdit);
   const nums = (type) => A.questions.map((q, i) => (q.type === type ? i + 1 : null)).filter(Boolean);
-  const closes = A.closes_at ? new Date(A.closes_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null;
   const qPoints = A.questions.reduce((t, q) => t + q.points, 0);
   const fbPoints = (A.questions.length + 1) * A.feedback_points;
   const each = [...new Set(A.questions.map((q) => q.points))];
@@ -534,7 +533,7 @@ function buildIntro() {
   return el('section', { class: 'cover' },
     el('div', { class: 'cover-head' },
       el('h1', { class: 'cover-title' }, el('strong', { text: 'DSO 429' }), ` · ${A.subtitle}`),
-      el('span', { text: [`${A.questions.length} questions`, plPoints(qPoints + fbPoints), closes && `closes ${closes}`].filter(Boolean).join(' · ') })),
+      el('span', { text: `${A.questions.length} questions · ${plPoints(qPoints + fbPoints)}` })),
     A.closed ? el('div', { class: 'notice warn', text: 'This quiz is closed. You can still look around, but you can no longer submit.' }) : null,
     el('div', { class: 'fields' },
       el('div', { class: 'blank' }, el('label', { for: 'student-name', text: 'Name' }), name),
