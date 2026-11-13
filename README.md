@@ -12,11 +12,15 @@ TypeSafe, scores each answer while the student works.
   mistake.
 
 After each question, a feedback box asks what the student thought of
-it. Any non-empty answer earns 1 credit. At the end, a checkbox asks if
-Claude Code may help grade the assignment. If the student leaves it
-unchecked, a person grades it by hand. A last feedback box asks how the
-student feels about AI grading compared with a human grader. It also
-earns 1 credit.
+it. Any non-empty answer earns `feedback_points` (1). At the end, a
+checkbox asks if Claude Code may help grade the assignment. If the
+student leaves it unchecked, a person grades it by hand. A last feedback
+box asks how the student feels about AI grading compared with a human
+grader. It earns the same points.
+
+Each question shows its `points` (2). The grader awards them. Jev only
+tells the student how close the answer is; it does not set points. The
+CSV has `feedback_points` already added up.
 
 Students can skip any question or feedback box. Only a name and an email
 are required to submit.

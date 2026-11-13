@@ -6,51 +6,59 @@
 <title>Live Answer Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" />
 <style>
-  /* Layout: one scrolling exam booklet. A sticky strip of question tabs, then
-     numbered questions on ruled answer paper, ending in consent and submit.
-     Blue-book blue is the accent; red is the grader's pen, used for marking. */
+  /* A printed quiz handout: a warm paper sheet on a desk, black ink, a
+     cardinal grader's pen for numbers and marks, and a yellow highlighter
+     for text the AI changed. Labels are plain sentence case. */
   :root {
-    --paper: #f4f6f9;
+    --desk: #ebe5d8;
+    --page: #fffdf7;
+    --tint: #f6f0e4;
     --sheet: #ffffff;
-    --ink: #172030;
-    --ink-2: #4a5466;
-    --ink-3: #7b8597;
-    --rule: #dbe2ec;
-    --rule-strong: #bcc7d6;
-    --blue: #1f4fa3;
-    --blue-ink: #ffffff;
-    --blue-soft: #e7eef9;
-    --red: #b5342a;
-    --red-soft: #fbece9;
-    --good: #2b7a4b;
-    --good-soft: #e5f3eb;
-    --warn: #9f620c;
-    --warn-soft: #fbf1df;
+    --ink: #1d1b18;
+    --ink-2: #565046;
+    --ink-3: #8a8377;
+    --on-ink: #fffdf7;
+    --rule: #e8e1d3;
+    --rule-strong: #cfc6b3;
+    --accent: #9e1b32;
+    --accent-soft: #f8e8ea;
+    --hl: #ffe27a;
+    --hl-soft: #fff6cf;
+    --good: #2f7a47;
+    --good-soft: #e7f2ea;
+    --warn: #96600f;
+    --warn-soft: #fbf0dc;
+    --red: #b3261e;
+    --red-soft: #fbe9e7;
+    --shadow: rgba(70, 50, 20, 0.16);
     --font-display: "Literata", Georgia, "Times New Roman", serif;
     --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --line: 1.75rem;
-    --gutter-l: max(16px, env(safe-area-inset-left, 0px));
-    --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+    --pad: clamp(16px, 6vw, 60px);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper: #0f141c; --sheet: #161d28; --ink: #e5eaf1; --ink-2: #aab4c3; --ink-3: #7c8798;
-      --rule: #253041; --rule-strong: #3a4659;
-      --blue: #8aabea; --blue-ink: #0c1526; --blue-soft: #1a2944;
-      --red: #ef8a7e; --red-soft: #3a1e1b;
-      --good: #6bc893; --good-soft: #13301f; --warn: #e2ab55; --warn-soft: #33260f;
+      --desk: #121110; --page: #1b1916; --tint: #24211c; --sheet: #211e1a;
+      --ink: #ede7db; --ink-2: #bdb4a5; --ink-3: #8d8577; --on-ink: #1b1916;
+      --rule: #302c26; --rule-strong: #4b453b;
+      --accent: #ee8e9a; --accent-soft: #3a1e23;
+      --hl: rgba(222, 186, 62, 0.42); --hl-soft: #332c17;
+      --good: #7cc995; --good-soft: #16301f; --warn: #e3ae5c; --warn-soft: #33270f;
+      --red: #f08a80; --red-soft: #3b1d1a; --shadow: rgba(0, 0, 0, 0.5);
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --paper: #0f141c; --sheet: #161d28; --ink: #e5eaf1; --ink-2: #aab4c3; --ink-3: #7c8798;
-    --rule: #253041; --rule-strong: #3a4659;
-    --blue: #8aabea; --blue-ink: #0c1526; --blue-soft: #1a2944;
-    --red: #ef8a7e; --red-soft: #3a1e1b;
-    --good: #6bc893; --good-soft: #13301f; --warn: #e2ab55; --warn-soft: #33260f;
+    --desk: #121110; --page: #1b1916; --tint: #24211c; --sheet: #211e1a;
+    --ink: #ede7db; --ink-2: #bdb4a5; --ink-3: #8d8577; --on-ink: #1b1916;
+    --rule: #302c26; --rule-strong: #4b453b;
+    --accent: #ee8e9a; --accent-soft: #3a1e23;
+    --hl: rgba(222, 186, 62, 0.42); --hl-soft: #332c17;
+    --good: #7cc995; --good-soft: #16301f; --warn: #e3ae5c; --warn-soft: #33270f;
+    --red: #f08a80; --red-soft: #3b1d1a; --shadow: rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
 
@@ -59,84 +67,116 @@
   html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    background: var(--paper);
+    background: var(--desk);
     color: var(--ink);
     font: 400 16px/1.55 var(--font-body);
     -webkit-font-smoothing: antialiased;
   }
   body::before {
     content: ""; position: fixed; inset: 0 0 auto; z-index: 30;
-    height: env(safe-area-inset-top, 0px); background: var(--paper);
+    height: env(safe-area-inset-top, 0px); background: var(--desk);
   }
-  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  a { color: inherit; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     *, *::before, *::after { transition: none !important; }
   }
 
-  /* ---------- sticky strip ---------- */
+  /* ---------- sticky strip: course name and answer bubbles ---------- */
   .strip {
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
-    background: var(--paper);
+    background: var(--desk);
     border-bottom: 1px solid var(--rule-strong);
   }
   .strip-inner {
-    max-width: 760px; margin: 0 auto;
-    padding-block: 10px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    max-width: 840px; margin: 0 auto;
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
   }
-  .brand { font: 500 13px/1 var(--font-mono); letter-spacing: 0.04em; color: var(--ink); white-space: nowrap; }
+  .brand { font: 600 14px/1 var(--font-body); white-space: nowrap; }
   .progress-text { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
-  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
   .conn-dot.on { background: var(--good); }
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
   .tab {
-    min-width: 32px; height: 32px; padding: 0 8px;
+    width: 30px; height: 30px; padding: 0;
     display: inline-grid; place-items: center;
-    border: 1px solid var(--rule-strong); border-radius: 6px;
-    font: 500 13px/1 var(--font-mono); color: var(--ink-2);
-    text-decoration: none; background: var(--sheet);
+    border: 1.5px solid var(--ink-3); border-radius: 50%;
+    font: 600 13px/1 var(--font-body); color: var(--ink-2);
+    text-decoration: none; background: var(--page);
+    font-variant-numeric: tabular-nums;
   }
-  .tab.started { border-color: var(--blue); color: var(--blue); }
-  .tab.complete { background: var(--blue); border-color: var(--blue); color: var(--blue-ink); }
+  .tab.started { border: 2px solid var(--ink); color: var(--ink); }
+  .tab.complete { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+  .tab.wide { width: auto; padding: 0 12px; border-radius: 999px; }
   .tab-reset { border-style: dashed; border-color: var(--warn); color: var(--warn); background: transparent; cursor: pointer; }
 
-  /* ---------- page ---------- */
+  /* ---------- the quiz sheet ---------- */
   main {
-    max-width: 760px; margin: 0 auto;
-    padding-block: 48px 120px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
-    display: grid; gap: 64px;
+    max-width: 840px; margin: 28px auto 96px;
+    background: var(--page);
+    border: 1px solid var(--rule-strong);
+    box-shadow: 0 18px 40px -26px var(--shadow);
+    padding-block: 44px 64px;
+    padding-left: max(var(--pad), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--pad), env(safe-area-inset-right, 0px));
+    display: grid; gap: 56px;
   }
-  .eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); }
-  h1 { font: 600 clamp(2.1rem, 6vw, 2.9rem)/1.08 var(--font-display); letter-spacing: -0.015em; margin: 10px 0 14px; text-wrap: balance; }
-  .lede { color: var(--ink-2); max-width: 62ch; margin: 0; }
-  .intro { display: grid; gap: 28px; }
-  .howto {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px;
-    margin: 0; padding-top: 24px; border-top: 1px solid var(--rule);
+  @media (max-width: 640px) {
+    main { margin: 0 0 64px; border-width: 0 0 1px; box-shadow: none; padding-block: 28px 48px; gap: 44px; }
   }
-  .howto div { min-width: 0; }
-  .howto dt { font-weight: 600; }
-  .howto dd { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; }
-  .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+
+  /* ---------- cover ---------- */
+  .cover { display: grid; gap: 30px; }
+  .cover-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px;
+    padding-bottom: 10px; border-bottom: 3px double var(--ink);
+    font-size: 14px; color: var(--ink-2);
+  }
+  .cover-head strong { color: var(--ink); font-weight: 600; }
+  h1 { font: 600 clamp(2.2rem, 6vw, 3rem)/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
+  .lede { margin: 10px 0 0; max-width: 60ch; color: var(--ink-2); font: 400 1.1rem/1.6 var(--font-display); }
+  .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 36px; }
+  .blank { display: flex; align-items: baseline; gap: 10px; }
+  .blank label { font-weight: 600; white-space: nowrap; }
+  .blank input {
+    flex: 1; min-width: 0; font: 400 1.05rem/1.4 var(--font-body); color: var(--ink);
+    background: transparent; border: 0; border-bottom: 1.5px solid var(--ink); border-radius: 0; padding: 4px 2px;
+  }
+  .blank input:focus { outline: none; border-bottom-color: var(--accent); box-shadow: 0 1.5px 0 var(--accent); }
+  .blank input::placeholder { color: var(--ink-3); }
+  .field-note { margin: 6px 0 0; font-size: 13px; color: var(--ink-3); }
+  .instructions h2, .contents-title { font: 600 1rem/1.3 var(--font-body); margin: 0 0 12px; }
+  .instructions ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; gap: 10px; }
+  .instructions li { counter-increment: step; display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); max-width: 68ch; }
+  .instructions li::before { content: counter(step) "."; font: 600 1rem/1.55 var(--font-display); color: var(--accent); }
+  .contents { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .contents th { text-align: left; font-size: 13px; font-weight: 600; color: var(--ink-2); padding: 0 12px 8px 0; border-bottom: 1.5px solid var(--ink); }
+  .contents td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  .contents td.n { width: 2rem; font: 600 1.05rem/1 var(--font-display); color: var(--accent); }
+  .contents .num { text-align: right; padding-right: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .contents .fb, .contents .pts { text-align: center; width: 5rem; font-variant-numeric: tabular-nums; }
+  .contents tbody .fb { color: var(--good); font-weight: 600; }
+  .contents td.fmt { color: var(--ink-2); white-space: nowrap; }
+  .contents tfoot td { border-bottom: 0; border-top: 1.5px solid var(--ink); font-weight: 600; }
   @media (max-width: 600px) {
-    .howto, .fields { grid-template-columns: 1fr; }
+    .fields { grid-template-columns: 1fr; }
+    .contents .fmt { display: none; }
   }
-  .label, label.field {
-    display: block; margin-bottom: 8px;
-    font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
-  }
-  input[type=text] {
-    width: 100%; font: inherit; color: var(--ink);
-    background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 10px 12px;
-  }
+
+  /* ---------- shared controls ---------- */
+  .label, label.field { display: block; margin-bottom: 8px; font: 600 15px/1.35 var(--font-body); color: var(--ink); }
   textarea {
     display: block; width: 100%; min-height: 9rem; resize: vertical;
     font: 400 1rem/1.6 var(--font-body); color: var(--ink);
-    background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 12px 14px;
+    background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 12px 14px;
   }
-  /* Exam paper: rules sit under every line of writing and scroll with the text. */
+  /* Rules sit under every line of writing and scroll with the text. */
   textarea.ruled {
     min-height: calc(var(--line) * 7);
     line-height: var(--line);
@@ -147,13 +187,14 @@
   }
   textarea.short { min-height: 5.5rem; }
   textarea:disabled, input:disabled { opacity: 0.7; }
+  textarea::placeholder { color: var(--ink-3); }
 
   .btn {
-    font: 600 14px/1 var(--font-body); padding: 11px 18px; border-radius: 6px; cursor: pointer;
-    background: var(--blue); color: var(--blue-ink); border: 1px solid var(--blue);
+    font: 600 14px/1 var(--font-body); padding: 11px 18px; border-radius: 4px; cursor: pointer;
+    background: var(--ink); color: var(--on-ink); border: 1px solid var(--ink);
   }
   .btn.ghost { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
-  .btn.pen { background: var(--red); border-color: var(--red); color: var(--sheet); }
+  .btn.pen { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn.small-btn { font-size: 13px; padding: 8px 12px; color: var(--ink-2); }
   .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
@@ -161,34 +202,34 @@
   .small { font-size: 13px; }
 
   /* ---------- question ---------- */
-  .q { display: grid; gap: 24px; padding-top: 48px; border-top: 1px solid var(--rule-strong); scroll-margin-top: 72px; }
-  .q-head { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: start; }
-  .q-num { font: 600 3.2rem/0.85 var(--font-display); color: var(--blue); font-variant-numeric: lining-nums; }
-  .q-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 12px/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
-  .q-meta .type { color: var(--blue); }
-  .q-meta .type.fix { color: var(--red); }
-  .q h2 { font: 600 1.55rem/1.2 var(--font-display); margin: 6px 0 0; text-wrap: balance; }
+  .q { display: grid; gap: 24px; padding-top: 44px; border-top: 1px solid var(--rule-strong); scroll-margin-top: 72px; }
+  .q-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 16px; align-items: start; }
+  .q-points { margin-top: 4px; padding: 3px 10px; border: 1.5px solid var(--ink); border-radius: 999px; font: 600 13px/1.4 var(--font-body); white-space: nowrap; }
+  .q-num { font: 600 2.6rem/0.95 var(--font-display); color: var(--accent); font-variant-numeric: lining-nums; }
+  .q h2 { font: 600 1.55rem/1.2 var(--font-display); margin: 0; text-wrap: balance; }
+  .q-meta { margin-top: 4px; font-size: 14px; color: var(--ink-3); }
   .prompt { font: 400 1.12rem/1.65 var(--font-display); margin: 0; max-width: 65ch; }
 
-  /* ---------- score scale ---------- */
+  /* ---------- how-close scale ---------- */
   .meter { display: grid; gap: 8px; }
   .meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .meter-value { font: 500 1.9rem/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
-  .meter-value small { font-size: 0.85rem; color: var(--ink-3); margin-left: 3px; }
+  .meter-value { font: 600 1.9rem/1 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-3); }
+  .meter-value small { font-size: 0.85rem; font-weight: 400; color: var(--ink-3); margin-left: 3px; }
   .meter-track { position: relative; height: 10px; border-radius: 5px; background: var(--rule); }
   .meter-fill {
     position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 5px; background: var(--ink-3);
     transition: width 260ms ease, background-color 260ms ease;
   }
   .meter-marker { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--ink); }
-  .meter-scale { position: relative; height: 14px; font: 400 11px/1 var(--font-mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .meter-scale { position: relative; height: 14px; font: 400 11px/1 var(--font-body); color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .meter-scale span { position: absolute; top: 0; transform: translateX(-50%); }
   .meter-scale span:first-child { transform: none; }
   .meter-scale span:last-child { transform: translateX(-100%); }
   .meter-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
   .meter-status { color: var(--ink-3); }
-  .meter[data-tone=low] .meter-fill { background: var(--red); }
-  .meter[data-tone=low] .meter-value { color: var(--red); }
+  /* Far off reads as pencil grey, not a red mark: this scale guides, it does not grade. */
+  .meter[data-tone=low] .meter-fill { background: var(--ink-3); }
+  .meter[data-tone=low] .meter-value { color: var(--ink-2); }
   .meter[data-tone=mid] .meter-fill { background: var(--warn); }
   .meter[data-tone=mid] .meter-value { color: var(--warn); }
   .meter[data-tone=high] .meter-fill { background: var(--good); }
@@ -196,41 +237,42 @@
 
   .hints { display: grid; gap: 10px; }
   .hint-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .hint-list li { padding: 10px 14px; border-radius: 6px; background: var(--blue-soft); font-size: 15px; }
+  .hint-list li { padding: 10px 14px; border-left: 3px solid var(--hl); background: var(--hl-soft); font-size: 15px; }
 
   /* ---------- fix-the-AI ---------- */
-  .sheet { background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 20px 22px; }
-  .sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-bottom: 14px; }
+  .sheet { background: var(--tint); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 20px 22px; }
+  .sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-bottom: 12px; }
+  .sheet-head .label { font-size: 13px; color: var(--ink-2); }
   .ai-text { font: 400 1.06rem/1.72 var(--font-display); }
-  .ai-text mark { background: var(--blue-soft); color: inherit; box-shadow: inset 0 -2px 0 var(--blue); padding: 0 1px; }
-  .notice { padding: 12px 14px; border-radius: 6px; font-size: 15px; border: 1px solid; }
+  .ai-text mark { background: linear-gradient(transparent 45%, var(--hl) 45%); color: inherit; padding: 0 1px; }
+  .notice { padding: 12px 14px; border-radius: 4px; font-size: 15px; border: 1px solid; }
   .notice.ok { background: var(--good-soft); border-color: var(--good); }
   .notice.warn { background: var(--warn-soft); border-color: var(--warn); }
   .notice.err { background: var(--red-soft); border-color: var(--red); }
   .critique { display: grid; gap: 10px; }
   .rounds { margin: 0; padding: 0; list-style: none; display: grid; }
   .rounds li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; padding: 12px 0; border-top: 1px solid var(--rule); font-size: 15px; }
-  .rounds .n { font: 500 13px/1.6 var(--font-mono); color: var(--ink-3); grid-row: span 2; }
+  .rounds .n { font: 600 13px/1.6 var(--font-body); color: var(--accent); grid-row: span 2; }
   .rounds .meta { font-size: 13px; color: var(--ink-2); }
 
-  .feedback { display: grid; gap: 4px; padding: 18px 20px; border: 1px dashed var(--rule-strong); border-radius: 6px; }
-  .feedback .credit { color: var(--blue); }
+  .feedback { display: grid; gap: 4px; padding: 18px 20px; border: 1px dashed var(--rule-strong); border-radius: 4px; }
+  .feedback .credit { color: var(--accent); font-weight: 600; }
 
-  details.key { border: 1px dashed var(--warn); border-radius: 6px; padding: 10px 14px; }
-  details.key summary { cursor: pointer; font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--warn); }
+  details.key { border: 1px dashed var(--warn); border-radius: 4px; padding: 10px 14px; }
+  details.key summary { cursor: pointer; font: 600 13px/1.3 var(--font-body); color: var(--warn); }
   details.key p { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
   .dev-line { font: 400 12px/1.4 var(--font-mono); color: var(--ink-3); }
 
   /* ---------- submit ---------- */
-  .submit { display: grid; gap: 22px; padding-top: 48px; border-top: 2px solid var(--ink); scroll-margin-top: 72px; }
+  .submit { display: grid; gap: 22px; padding-top: 44px; border-top: 3px double var(--ink); scroll-margin-top: 72px; }
   .submit h2 { font: 600 1.8rem/1.15 var(--font-display); margin: 0; }
   .checklist { list-style: none; margin: 0; padding: 0; display: grid; }
   .checklist li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); font-size: 15px; }
   .checklist .yes { color: var(--good); white-space: nowrap; }
   .checklist .no { color: var(--warn); white-space: nowrap; }
   .checklist .skip { color: var(--ink-3); white-space: nowrap; }
-  .consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px 18px; background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; font-size: 15px; }
-  .consent input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--blue); }
+  .consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px 18px; background: var(--tint); border: 1px solid var(--rule-strong); border-radius: 4px; font-size: 15px; }
+  .consent input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--ink); }
   .receipt td { padding: 9px 0; border-top: 1px solid var(--rule); font-size: 15px; vertical-align: top; }
   .receipt td:last-child { text-align: right; color: var(--ink-2); padding-left: 16px; font-variant-numeric: tabular-nums; }
   .receipt { width: 100%; border-collapse: collapse; }
@@ -240,7 +282,7 @@
 <div class="strip">
   <div class="strip-inner">
     <div class="brand" id="brand">DSO 429 · Live Answer Lab</div>
-    <span class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">connecting</span></span>
+    <span class="conn" title="Connection for live scoring"><span class="conn-dot" id="connDot"></span><span id="connText">Connecting…</span></span>
     <span class="progress-text" id="progressText"></span>
     <nav class="tabs" id="tabs" aria-label="Questions"></nav>
   </div>
@@ -278,6 +320,8 @@ function el(tag, attrs = {}, ...children) {
   }
   return node;
 }
+// replaceChildren() would print an empty slot as the text "null".
+function fill(node, ...kids) { node.replaceChildren(...kids.flat().filter((c) => c != null && c !== false)); }
 const points = (score) => (score == null ? '—' : String(Math.round(score * 100)));
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
@@ -335,7 +379,7 @@ const hasFeedback = (q) => S.feedback[q.id].trim().length > 0;
 // ---------- websockets ----------
 function setConn(on) {
   document.getElementById('connDot').classList.toggle('on', on);
-  document.getElementById('connText').textContent = on ? 'live' : 'reconnecting';
+  document.getElementById('connText').textContent = on ? '' : 'Reconnecting…';
 }
 function connectJev() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -356,7 +400,8 @@ function connectJev() {
     if (d.error) { if (w) w.meter.status(`Scoring down: ${d.error}`); return; }
     S.answers[d.question_id].score = d.score;
     saveState();
-    if (w) { w.meter.set(d.score); w.meter.status(`${d.latency_ms} ms`); w.updateHint(); }
+    if (w) { w.meter.set(d.score); w.meter.status(''); w.updateHint(); }
+    updateCover();
   };
   jevWs.onclose = () => { setConn(false); setTimeout(connectJev, 1000); };
 }
@@ -419,7 +464,7 @@ function answerKey(q) {
     try {
       reveal = reveal || await api('/api/reveal');
       const r = reveal[q.id];
-      body.replaceChildren(
+      fill(body,
         el('p', {}, el('strong', { text: 'Reference answer. ' }), r.reference_answer),
         r.mistakes.length ? el('p', {}, el('strong', { text: 'Planted mistakes. ' }), r.mistakes.map((m, i) => `(${i + 1}) ${m} `)) : null,
       );
@@ -432,7 +477,7 @@ function answerKey(q) {
 function renderPage() {
   for (const k of Object.keys(ui)) delete ui[k];
   const app = document.getElementById('app');
-  app.replaceChildren(
+  fill(app,
     buildIntro(),
     ...A.questions.map((q) => {
       const s = el('section', { class: 'q', id: q.id, 'aria-labelledby': `${q.id}-title` });
@@ -451,49 +496,94 @@ function renderStrip() {
   const n = A.questions.length;
   const started = A.questions.filter(isStarted).length;
   const fb = A.questions.filter(hasFeedback).length;
-  document.getElementById('progressText').textContent = S.submitted ? 'Submitted' : `${started}/${n} answered · ${fb}/${n} feedback`;
+  document.getElementById('progressText').textContent = S.submitted ? 'Submitted' : `${started} of ${n} answered`;
   const tabs = A.questions.map((q, i) => {
     const cls = isStarted(q) && hasFeedback(q) ? 'complete' : isStarted(q) || hasFeedback(q) ? 'started' : '';
-    return el('a', { class: `tab ${cls}`, href: `#${q.id}`, 'aria-label': `Question ${i + 1}`, text: String(i + 1) });
+    return el('a', { class: `tab ${cls}`, href: `#${q.id}`, title: q.title, 'aria-label': `Question ${i + 1}: ${q.title}`, text: String(i + 1) });
   });
-  tabs.push(el('a', { class: 'tab', href: '#submit', text: 'Submit' }));
+  tabs.push(el('a', { class: 'tab wide', href: '#submit', text: 'Submit' }));
   if (A.demo_mode) {
-    tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Start over', onclick: () => {
+    tabs.push(el('button', { class: 'tab wide tab-reset', type: 'button', text: 'Start over', onclick: () => {
       if (!confirm('Clear every answer and start the whole assignment over? Your name and email stay.')) return;
       const keep = { student: S.student, restarts: (S.restarts || 0) + 1 };
       S = Object.assign(freshState(), keep); saveState(); renderPage(); window.scrollTo({ top: 0 });
     } }));
   }
   document.getElementById('tabs').replaceChildren(...tabs);
+  updateCover();
 }
 
+let coverBody = null;    // the cover's question table, refreshed as students work
+const plPoints = (n) => `${n} point${n === 1 ? '' : 's'}`;
+function listNums(nums) {
+  return nums.length === 1 ? `Question ${nums[0]}` : `Questions ${nums.slice(0, -1).join(', ')} and ${nums[nums.length - 1]}`;
+}
 function buildIntro() {
   const name = el('input', { type: 'text', id: 'student-name', autocomplete: 'name', value: S.student.name, disabled: locked() });
-  const email = el('input', { type: 'email', id: 'student-email', autocomplete: 'email', value: S.student.email, disabled: locked() });
+  const email = el('input', { type: 'email', id: 'student-email', autocomplete: 'email', placeholder: 'you@usc.edu', value: S.student.email, disabled: locked() });
   const onEdit = () => { S.student = { name: name.value.trim(), email: email.value.trim() }; saveState(); fillSubmit(); };
   name.addEventListener('input', onEdit); email.addEventListener('input', onEdit);
-  const live = A.questions.filter((q) => q.type === 'live').length;
-  const fix = A.questions.length - live;
-  return el('section', { class: 'intro' },
+  const nums = (type) => A.questions.map((q, i) => (q.type === type ? i + 1 : null)).filter(Boolean);
+  const closes = A.closes_at ? new Date(A.closes_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  const qPoints = A.questions.reduce((t, q) => t + q.points, 0);
+  const fbPoints = (A.questions.length + 1) * A.feedback_points;
+  const each = [...new Set(A.questions.map((q) => q.points))];
+  coverBody = el('tbody');
+  updateCover();
+  return el('section', { class: 'cover' },
+    el('div', { class: 'cover-head' },
+      el('span', {}, el('strong', { text: 'DSO 429' }), ` · ${A.subtitle}`),
+      el('span', { text: [`${A.questions.length} questions`, plPoints(qPoints + fbPoints), closes && `closes ${closes}`].filter(Boolean).join(' · ') })),
     el('div', {},
-      el('div', { class: 'eyebrow', text: A.subtitle }),
       el('h1', { text: A.title }),
-      el('p', { class: 'lede', text: `${A.company_note} Your feedback on each question counts most. Your work saves in this browser as you go.` }),
-      A.closes_at ? el('p', { class: 'small muted', style: 'margin:8px 0 0', text: `Closes ${new Date(A.closes_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.` }) : null,
-    ),
-    A.closed ? el('div', { class: 'notice warn', text: 'This assignment is closed. You can still look around, but you can no longer submit.' }) : null,
-    el('dl', { class: 'howto' },
-      el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Jev, an AI grader, scores your answer as you type. Low score? Ask for a hint.' })),
-      el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answer has planted mistakes. Point them out; the AI fixes only what you name.' })),
-      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'Tell us what you thought of each question. You can skip any question.' })),
-      el('div', {}, el('dt', { text: 'AI grading' }), el('dd', { text: 'Choose whether Claude Code may help grade your work, and tell us how you feel about AI grading.' })),
-    ),
+      el('p', { class: 'lede', text: A.company_note })),
+    A.closed ? el('div', { class: 'notice warn', text: 'This quiz is closed. You can still look around, but you can no longer submit.' }) : null,
     el('div', { class: 'fields' },
-      el('div', {}, el('label', { class: 'field', for: 'student-name', text: 'Full name' }), name),
-      el('div', {}, el('label', { class: 'field', for: 'student-email', text: 'Email' }), email,
-        el('div', { class: 'small muted', style: 'margin-top:6px', text: `Use ${A.student_email_hint}.` })),
-    ),
+      el('div', { class: 'blank' }, el('label', { for: 'student-name', text: 'Name' }), name),
+      el('div', {},
+        el('div', { class: 'blank' }, el('label', { for: 'student-email', text: 'Email' }), email),
+        el('p', { class: 'field-note', text: `Use ${A.student_email_hint}.` }))),
+    el('div', { class: 'instructions' },
+      el('h2', { text: 'Instructions' }),
+      el('ol', {},
+        el('li', { text: `${listNums(nums('live'))}: type your answer. As you type, Jev, an AI model, tells you how close you are to the answer. If you are far off, you can ask for a hint.` }),
+        el('li', { text: `${listNums(nums('correction'))}: an AI wrote an answer with mistakes in it. Tell the AI which claim is wrong and why. It fixes only what you explain.` }),
+        el('li', { text: `Each question is worth ${each.length === 1 ? plPoints(each[0]) : 'the points shown'}. After each question, tell us what you thought of it, for ${plPoints(A.feedback_points)}. We care most about this feedback.` }),
+        el('li', { text: 'You can skip anything. Your work saves in this browser, and you can submit again until the deadline.' }))),
+    el('div', {},
+      el('h2', { class: 'contents-title', text: 'Questions' }),
+      el('div', { style: 'overflow-x:auto' }, el('table', { class: 'contents' },
+        el('thead', {}, el('tr', {},
+          el('th', { text: '#' }), el('th', { text: 'Question' }), el('th', { class: 'fmt', text: 'Format' }),
+          el('th', { class: 'num', text: 'How close' }), el('th', { class: 'pts', text: 'Points' }), el('th', { class: 'fb', text: 'Feedback' }))),
+        coverBody,
+        el('tfoot', {}, el('tr', { class: 'total' },
+          el('td', {}), el('td', { text: 'Total' }), el('td', { class: 'fmt' }), el('td', {}),
+          el('td', { class: 'pts', text: String(qPoints) }), el('td', { class: 'fb', text: `${fbPoints}` })))))),
   );
+}
+function updateCover() {
+  if (!coverBody) return;
+  const rows = A.questions.map((q, i) => {
+    const a = S.answers[q.id];
+    const close = q.type === 'live'
+      ? (!a.text.trim() ? '—' : a.score == null ? '…' : `${points(a.score)}/100`)
+      : (!a.rounds.length ? '—' : a.solved ? 'Solved' : `${points(a.progress)}/100`);
+    return el('tr', {},
+      el('td', { class: 'n', text: String(i + 1) }),
+      el('td', {}, el('a', { href: `#${q.id}`, text: q.title })),
+      el('td', { class: 'fmt', text: q.type === 'live' ? 'Typed answer' : 'Fix the AI' }),
+      el('td', { class: 'num', text: close }),
+      el('td', { class: 'pts', text: String(q.points) }),
+      el('td', { class: 'fb', text: hasFeedback(q) ? '✓' : '' }));
+  });
+  rows.push(el('tr', {},
+    el('td', { class: 'n' }),
+    el('td', {}, el('a', { href: '#ai-feedback', text: 'Your view on AI grading' })),
+    el('td', { class: 'fmt', text: 'Feedback only' }),
+    el('td', { class: 'num', text: '' }), el('td', { class: 'pts', text: '' }),
+    el('td', { class: 'fb', text: (S.aiFeedback || '').trim() ? '✓' : '' })));
+  coverBody.replaceChildren(...rows);
 }
 
 function fillQuestion(q) {
@@ -502,13 +592,10 @@ function fillQuestion(q) {
   const head = el('header', { class: 'q-head' },
     el('div', { class: 'q-num', 'aria-hidden': 'true', text: String(i + 1) }),
     el('div', {},
-      el('div', { class: 'q-meta' },
-        el('span', { text: `Question ${i + 1} of ${A.questions.length}` }),
-        el('span', { text: q.topic }),
-        el('span', { class: q.type === 'live' ? 'type' : 'type fix', text: q.type === 'live' ? 'Live answer' : 'Fix the AI' }),
-      ),
       el('h2', { id: `${q.id}-title`, text: q.title }),
+      el('div', { class: 'q-meta', text: `${q.type === 'live' ? 'Typed answer' : 'Fix the AI'} · ${q.topic}` }),
     ),
+    el('div', { class: 'q-points', text: plPoints(q.points) }),
   );
   // Resetting also gives back the rounds, so each reset is recorded for graders.
   const restart = q.type !== 'correction' ? null : el('button', { class: 'btn ghost small-btn', type: 'button', text: 'Start this question over', disabled: locked(), onclick: () => {
@@ -517,7 +604,7 @@ function fillQuestion(q) {
     S.resets[q.id] = (S.resets[q.id] || 0) + 1;
     saveState(); fillQuestion(q); renderStrip(); fillSubmit();
   } });
-  sections[q.id].replaceChildren(
+  fill(sections[q.id],
     head,
     el('p', { class: 'prompt', text: q.prompt }),
     answerKey(q),
@@ -531,9 +618,9 @@ function liveBody(q) {
   const a = S.answers[q.id];
   const box = el('textarea', { class: 'ruled', id: `answer-${q.id}`, placeholder: 'Your answer…', disabled: locked() });
   box.value = a.text;
-  const meter = makeMeter({ label: 'Jev score', markAt: A.hint_threshold, markText: `Hints below ${Math.round(A.hint_threshold * 100)}` });
+  const meter = makeMeter({ label: 'How close you are', markAt: A.hint_threshold, markText: `Hints unlock below ${Math.round(A.hint_threshold * 100)}` });
   meter.set(a.score);
-  meter.status(a.score == null ? '' : 'Last score');
+  meter.status('');
   const cosine = A.dev_cosine ? el('div', { class: 'dev-line', text: 'dev · cosine similarity —' }) : null;
 
   const hintBtn = el('button', { class: 'btn ghost', type: 'button', text: 'Get a hint' });
@@ -588,7 +675,7 @@ function fixBody(q) {
     text,
   );
 
-  const meter = makeMeter({ label: 'Score', markAt: null, markText: 'Solved when every claim is right' });
+  const meter = makeMeter({ label: 'How close the answer is', markAt: null, markText: 'Solved when every claim is right' });
   meter.set(a.progress);
   meter.status('');
 
@@ -665,7 +752,7 @@ function feedbackBlock(q) {
   box.value = S.feedback[q.id];
   box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); renderStrip(); fillSubmit(); });
   return el('div', { class: 'feedback' },
-    el('label', { class: 'field', for: `feedback-${q.id}` }, 'What did you think of this question? · ', el('span', { class: 'credit', text: '1 credit' })),
+    el('label', { class: 'field', for: `feedback-${q.id}` }, 'What did you think of this question? · ', el('span', { class: 'credit', text: plPoints(A.feedback_points) })),
     box,
   );
 }
@@ -673,7 +760,7 @@ function feedbackBlock(q) {
 function fillSubmit() {
   const s = sections.submit;
   if (!s) return;
-  if (S.submitted) { s.replaceChildren(...receipt()); return; }
+  if (S.submitted) { fill(s, receipt()); return; }
   // Only name and email are required. Skipped questions and empty
   // feedback boxes just earn nothing.
   const emailOk = new RegExp(A.student_email_pattern, 'i').test(S.student.email || '');
@@ -702,7 +789,7 @@ function fillSubmit() {
   const aiBox = el('textarea', { class: 'short', id: 'ai-feedback', placeholder: 'Fairer or less fair? More or less consistent? Would you trust it?' });
   aiBox.value = S.aiFeedback;
   aiBox.addEventListener('input', () => {
-    S.aiFeedback = aiBox.value; saveState();
+    S.aiFeedback = aiBox.value; saveState(); updateCover();
     const st = fbStatus(aiDone()); aiStatus.className = st.class; aiStatus.textContent = st.text;
   });
   const submit = el('button', { class: 'btn', type: 'button', text: 'Submit assignment' });
@@ -726,7 +813,7 @@ function fillSubmit() {
       submit.disabled = false; submit.textContent = 'Submit assignment';
     }
   });
-  s.replaceChildren(
+  fill(s,
     el('h2', { id: 'submit-title', text: 'Submit' }),
     S.lastSubmissionId ? el('div', { class: 'notice ok', text: `You submitted before (ID ${S.lastSubmissionId}). Submitting again replaces it for grading.` }) : null,
     el('ul', { class: 'checklist' }, items),
@@ -734,7 +821,7 @@ function fillSubmit() {
       el('span', {}, el('strong', { text: 'Claude Code may help grade my work. ' }),
         'A TA reviews every grade. Unchecked means graded by hand.')),
     el('div', { class: 'feedback' },
-      el('label', { class: 'field', for: 'ai-feedback' }, 'How do you feel about AI grading your work, compared with a human grader? · ', el('span', { class: 'credit', text: '1 credit' })),
+      el('label', { class: 'field', for: 'ai-feedback' }, 'How do you feel about AI grading your work, compared with a human grader? · ', el('span', { class: 'credit', text: plPoints(A.feedback_points) })),
       aiBox),
     errorBox,
     el('div', { class: 'row' },
@@ -749,8 +836,8 @@ function receipt() {
     const s = d.server_scores[q.id] || {};
     const detail = s.error ? `Not scored: ${s.error}`
       : s.attempted === false ? 'Skipped'
-      : q.type === 'live' ? `Jev ${points(s.score)}/100`
-      : `Score ${points(s.progress)}/100${s.solved ? ' · solved' : ''}`;
+      : q.type === 'live' ? `${points(s.score)}/100 close`
+      : `${points(s.progress)}/100 close${s.solved ? ' · solved' : ''}`;
     return el('tr', {}, el('td', { text: `${i + 1}. ${q.title}` }), el('td', { text: detail }));
   });
   const download = el('button', { class: 'btn ghost', type: 'button', text: 'Download a copy' });
@@ -771,7 +858,7 @@ function receipt() {
     el('h2', { id: 'submit-title', text: 'Submitted' }),
     el('p', { class: 'muted', style: 'margin:0' }, 'ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
     el('div', { style: 'overflow-x:auto' }, el('table', { class: 'receipt' }, el('tbody', {}, rows))),
-    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${d.feedback_total || A.questions.length + 1}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.${A.closed ? '' : ' You can still change your work and submit again. We grade your latest submission.'}` }),
+    el('p', { class: 'small muted', style: 'margin:0', text: `Feedback points: ${d.feedback_credits * A.feedback_points}/${(d.feedback_total || A.questions.length + 1) * A.feedback_points}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.${A.closed ? '' : ' You can still change your work and submit again. We grade your latest submission.'}` }),
     el('div', { class: 'row' }, download, edit),
   ];
 }

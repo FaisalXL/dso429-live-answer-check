@@ -350,7 +350,7 @@ def require_admin(credentials: HTTPBasicCredentials = Depends(security)) -> None
 
 
 def public_question(question: dict) -> dict:
-    view = {k: question[k] for k in ("id", "type", "topic", "title", "prompt")}
+    view = {k: question[k] for k in ("id", "type", "topic", "title", "points", "prompt")}
     if question["type"] == "correction":
         view["seed_answer"] = question["seed_answer"]
         view["mistake_count"] = len(question["mistakes"])
@@ -377,6 +377,7 @@ def get_assignment():
         "demo_mode": DEMO_MODE,
         "closes_at": CLOSE_TIME.isoformat() if CLOSE_TIME else None,
         "closed": is_closed(),
+        "feedback_points": ASSIGNMENT.get("feedback_points", 1),
         "student_email_pattern": STUDENT_EMAIL_PATTERN,
         "student_email_hint": STUDENT_EMAIL_HINT,
         "dev_cosine": DEV_COSINE,
@@ -655,7 +656,7 @@ def export_csv(_: None = Depends(require_admin)):
             continue
     records.sort(key=lambda r: r["submitted_at"], reverse=True)
     seen: set[str] = set()
-    columns = ["latest", "submitted_at", "name", "email", "feedback_credits",
+    columns = ["latest", "submitted_at", "name", "email", "feedback_points",
                "consent_claude_code_grading", "ai_grading_feedback", "restarts"]
     for i, q in enumerate(ASSIGNMENT["questions"], 1):
         columns += [f"q{i}_feedback", f"q{i}_score", f"q{i}_answer"]
@@ -671,7 +672,7 @@ def export_csv(_: None = Depends(require_admin)):
         row = {
             "latest": "yes" if sid not in seen else "no",
             "submitted_at": r["submitted_at"], "name": r["student"]["name"], "email": sid,
-            "feedback_credits": r.get("feedback_credits", 0),
+            "feedback_points": r.get("feedback_credits", 0) * ASSIGNMENT.get("feedback_points", 1),
             "consent_claude_code_grading": "yes" if r.get("consent_claude_code_grading") else "no",
             "ai_grading_feedback": r.get("ai_grading_feedback", ""),
             "restarts": (r.get("client") or {}).get("restarts", 0),

@@ -2,12 +2,14 @@
   "title": "Live Answer Lab",
   "subtitle": "Extra credit",
   "company_note": "Every question is about Pedalwise, a made-up bike-share company.",
+  "feedback_points": 1,
   "questions": [
     {
       "id": "q1",
       "type": "live",
       "topic": "A/B testing",
       "title": "Pick the right metric",
+      "points": 2,
       "prompt": "Pedalwise tests a new home screen in its bike-share app. Version B raises taps on the 'Unlock a bike' button by 8% compared with version A, but completed rides per user are the same in both versions. The product team wants to declare B the winner. Explain why tap rate may be the wrong success metric here, and say what Pedalwise should measure instead.",
       "reference_answer": "Tap rate is a proxy, not the outcome Pedalwise cares about. More taps can come from a more prominent or more confusing button, accidental taps, or riders tapping again after a failed unlock, so taps can rise while nothing valuable changes. The business goal is rides and the revenue they bring, and completed rides did not move, so B has not shown any business value. Pedalwise should choose its primary metric before the test, such as completed rides or revenue per user, judge B on that metric, and use tap rate only as a secondary, diagnostic signal.",
       "jev": {
@@ -23,6 +25,7 @@
       "type": "live",
       "topic": "Neural networks",
       "title": "Read the training curve",
+      "points": 2,
       "prompt": "Pedalwise trains a neural network to predict how many bikes each station will need tomorrow. Over 50 rounds of training (epochs), the training loss keeps going down the whole time. The validation loss goes down until epoch 20 and then starts going back up. Explain what is happening after epoch 20, and say which version of the model Pedalwise should keep.",
       "reference_answer": "After epoch 20 the model is overfitting: it keeps getting better on the training data by memorizing its noise and quirks, but it gets worse on new data, which is what the rising validation loss shows. The validation loss is the honest measure of how the model will do in practice. Pedalwise should keep the model from around epoch 20, where validation loss was lowest, and stop training there (early stopping). It could also add regularization or more data so the model overfits less.",
       "jev": {
@@ -38,6 +41,7 @@
       "type": "correction",
       "topic": "A/B testing",
       "title": "Fix the AI's test plan",
+      "points": 2,
       "prompt": "Pedalwise wants to know whether a new sign-up page gets more people to become members than the current page. Explain how Pedalwise should run a fair A/B test to find out.",
       "reference_answer": "Pedalwise should randomly assign each visitor to the new page or the current page, so the two groups are alike in every other way and any difference comes from the page itself. It should decide in advance how many visitors it needs and check the result once at the end, instead of stopping as soon as one page is ahead, because checking repeatedly and stopping at the first good-looking result makes false wins much more likely. And it needs enough visitors: with only a few dozen people per page, differences are mostly random noise, so it needs a large enough sample and a significance test before declaring a winner.",
       "seed_answer": "Pedalwise should show the new page every morning and the current page every afternoon, then compare how many people sign up on each. It should check the results every day and stop the test as soon as the new page is ahead, because that proves the new page is better. About 30 visitors per page is plenty, since any difference in sign-ups between the pages is real.",
@@ -72,6 +76,7 @@
       "type": "correction",
       "topic": "Reinforcement learning",
       "title": "Fix the AI's reward plan",
+      "points": 2,
       "prompt": "Pedalwise trains an AI support agent with reinforcement learning. The agent gets a reward of +1 every time it closes a rider's support ticket. Explain what could go wrong with this reward and what Pedalwise should do about it.",
       "reference_answer": "Closed tickets are only a stand-in for what Pedalwise wants, which is riders whose problems are actually solved. The agent does not understand that goal; it learns whatever earns reward, so it can learn to close tickets without solving them, for example by closing a ticket as soon as the rider goes quiet. This is called reward hacking: the reward goes up while the real goal does not. So Pedalwise should not watch the reward alone. It should also watch a guard metric that would reveal the problem, such as how often closed tickets get reopened. It can also change the reward so hacking does not pay, for example by subtracting points when a ticket is reopened.",
       "seed_answer": "Rewarding the agent for every closed ticket is a good plan, because more closed tickets always means happier riders. The agent will only close a ticket once the rider's problem is truly solved, since it understands what Pedalwise is trying to achieve. And Pedalwise only needs to watch that one reward number; there is nothing else to check.",
