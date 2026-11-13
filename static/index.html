@@ -228,6 +228,7 @@
   .checklist li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); font-size: 15px; }
   .checklist .yes { color: var(--good); white-space: nowrap; }
   .checklist .no { color: var(--warn); white-space: nowrap; }
+  .checklist .skip { color: var(--ink-3); white-space: nowrap; }
   .consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px 18px; background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; font-size: 15px; }
   .consent input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--blue); }
   .receipt td { padding: 9px 0; border-top: 1px solid var(--rule); font-size: 15px; vertical-align: top; }
@@ -307,11 +308,13 @@ function freshAnswer(q) {
 function freshState() {
   const answers = {}, feedback = {};
   for (const q of A.questions) { answers[q.id] = freshAnswer(q); feedback[q.id] = ''; }
-  return { version: 3, sessionId: A.session_id, startedAt: new Date().toISOString(), student: { name: '', id: '' }, answers, feedback, consent: false, submitted: null, resets: {}, restarts: 0 };
+  return { version: 3, sessionId: A.session_id, startedAt: new Date().toISOString(), student: { name: '', email: '' }, answers, feedback, aiFeedback: '', consent: false, submitted: null, resets: {}, restarts: 0 };
 }
 function reconcileState(saved) {
   if (!saved || saved.version !== 3) return freshState();
   saved.resets = saved.resets || {};
+  saved.student = { name: saved.student?.name || '', email: saved.student?.email || '' };
+  if (saved.aiFeedback == null) saved.aiFeedback = '';
   for (const q of A.questions) {
     const fresh = freshAnswer(q);
     if (!saved.answers[q.id] || saved.answers[q.id].for !== fresh.for) {
@@ -456,7 +459,7 @@ function renderStrip() {
   tabs.push(el('a', { class: 'tab', href: '#submit', text: 'Submit' }));
   if (A.demo_mode) {
     tabs.push(el('button', { class: 'tab tab-reset', type: 'button', text: 'Start over', onclick: () => {
-      if (!confirm('Clear every answer and start the whole assignment over? Your name and ID stay.')) return;
+      if (!confirm('Clear every answer and start the whole assignment over? Your name and email stay.')) return;
       const keep = { student: S.student, restarts: (S.restarts || 0) + 1 };
       S = Object.assign(freshState(), keep); saveState(); renderPage(); window.scrollTo({ top: 0 });
     } }));
@@ -466,9 +469,9 @@ function renderStrip() {
 
 function buildIntro() {
   const name = el('input', { type: 'text', id: 'student-name', autocomplete: 'name', value: S.student.name, disabled: locked() });
-  const sid = el('input', { type: 'text', id: 'student-id', value: S.student.id, disabled: locked() });
-  const onEdit = () => { S.student = { name: name.value.trim(), id: sid.value.trim() }; saveState(); fillSubmit(); };
-  name.addEventListener('input', onEdit); sid.addEventListener('input', onEdit);
+  const email = el('input', { type: 'email', id: 'student-email', autocomplete: 'email', value: S.student.email, disabled: locked() });
+  const onEdit = () => { S.student = { name: name.value.trim(), email: email.value.trim() }; saveState(); fillSubmit(); };
+  name.addEventListener('input', onEdit); email.addEventListener('input', onEdit);
   const live = A.questions.filter((q) => q.type === 'live').length;
   const fix = A.questions.length - live;
   return el('section', { class: 'intro' },
@@ -482,13 +485,13 @@ function buildIntro() {
     el('dl', { class: 'howto' },
       el('div', {}, el('dt', { text: `${live} live questions` }), el('dd', { text: 'Jev, an AI grader, scores your answer as you type. Low score? Ask for a hint.' })),
       el('div', {}, el('dt', { text: `${fix} fix-the-AI questions` }), el('dd', { text: 'An AI answer has planted mistakes. Point them out; the AI fixes only what you name.' })),
-      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'Tell us how each question went.' })),
-      el('div', {}, el('dt', { text: 'Grading consent' }), el('dd', { text: 'Choose whether Claude Code may help grade your work.' })),
+      el('div', {}, el('dt', { text: 'Feedback, 1 credit each' }), el('dd', { text: 'Tell us what you thought of each question. You can skip any question.' })),
+      el('div', {}, el('dt', { text: 'AI grading' }), el('dd', { text: 'Choose whether Claude Code may help grade your work, and tell us how you feel about AI grading.' })),
     ),
     el('div', { class: 'fields' },
       el('div', {}, el('label', { class: 'field', for: 'student-name', text: 'Full name' }), name),
-      el('div', {}, el('label', { class: 'field', for: 'student-id', text: 'Student ID' }), sid,
-        el('div', { class: 'small muted', style: 'margin-top:6px', text: `Use ${A.student_id_hint}.` })),
+      el('div', {}, el('label', { class: 'field', for: 'student-email', text: 'Email' }), email,
+        el('div', { class: 'small muted', style: 'margin-top:6px', text: `Use ${A.student_email_hint}.` })),
     ),
   );
 }
@@ -564,8 +567,11 @@ function liveBody(q) {
 
 function fixBody(q) {
   const a = S.answers[q.id];
+  // Only notes that change the answer use up a round. Tries are capped
+  // separately to bound API cost.
   const used = a.rounds.length;
-  const outOfRounds = used >= q.max_rounds;
+  const applied = a.rounds.filter((r) => r.changed).length;
+  const outOfRounds = applied >= q.max_rounds || used >= q.max_rounds * 3;
   const last = a.rounds[used - 1];
 
   const text = el('div', { class: 'ai-text' });
@@ -575,8 +581,8 @@ function fixBody(q) {
     if (i < all.length - 1) text.appendChild(document.createTextNode(' '));
   });
   const sheetLabel = !used ? "AI answer"
-    : last.changed === false ? `AI answer · round ${used} · no changes`
-    : `AI answer · round ${used} · changes underlined`;
+    : last.changed === false ? 'AI answer · your last note changed nothing'
+    : 'AI answer · changes underlined';
   const sheet = el('div', { class: 'sheet' },
     el('div', { class: 'sheet-head' }, el('span', { class: 'label', style: 'margin:0', text: sheetLabel })),
     text,
@@ -587,7 +593,7 @@ function fixBody(q) {
   meter.status('');
 
   let notice = null;
-  if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(used, 'round')}.` });
+  if (a.solved) notice = el('div', { class: 'notice ok', text: `Solved in ${plural(applied, 'round')}.` });
   else if (outOfRounds) notice = el('div', { class: 'notice warn', text: 'No rounds left. Start over to try again.' });
   else if (a.notice) notice = el('div', { class: 'notice warn', text: a.notice });
 
@@ -609,8 +615,8 @@ function fixBody(q) {
       });
       if (d.changed) a.previous_answer = a.ai_answer;
       a.ai_answer = d.revised_answer;
-      a.notice = !d.feedback_specific ? 'No changes made. Say which claim is wrong, and why.'
-        : d.rejected ? 'Not applied: the AI changed more than your note explained. Explain each claim you mention.'
+      a.notice = !d.feedback_specific ? "No changes made. Say which claim is wrong, and why. This didn't use a round."
+        : d.rejected ? "Not applied: the AI changed more than your note explained. Explain each claim you mention. This didn't use a round."
         : null;
       Object.assign(a, { score: d.score, progress: d.progress, fixed: d.fixed, fixed_count: d.fixed_count, solved: d.solved, draft: '' });
       saveState(); fillQuestion(q); renderStrip(); fillSubmit();
@@ -649,17 +655,17 @@ function fixBody(q) {
     el('div', { class: 'critique' },
       el('label', { class: 'field', style: 'margin:0', for: `critique-${q.id}`, text: "What's wrong with the AI's answer?" }),
       draft, errorBox,
-      el('div', { class: 'row' }, el('span', { class: 'small muted', text: `Round ${Math.min(used + 1, q.max_rounds)}/${q.max_rounds}` }), send)),
+      el('div', { class: 'row' }, el('span', { class: 'small muted', text: `Round ${Math.min(applied + 1, q.max_rounds)}/${q.max_rounds}` }), send)),
     log,
   );
 }
 
 function feedbackBlock(q) {
-  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Clear? Too hard? Fair score?', disabled: locked() });
+  const box = el('textarea', { class: 'short', id: `feedback-${q.id}`, placeholder: 'Clear or confusing? Too easy or too hard? Did the score feel fair?', disabled: locked() });
   box.value = S.feedback[q.id];
   box.addEventListener('input', () => { S.feedback[q.id] = box.value; saveState(); renderStrip(); fillSubmit(); });
   return el('div', { class: 'feedback' },
-    el('label', { class: 'field', for: `feedback-${q.id}` }, 'Feedback · ', el('span', { class: 'credit', text: '1 credit' })),
+    el('label', { class: 'field', for: `feedback-${q.id}` }, 'What did you think of this question? · ', el('span', { class: 'credit', text: '1 credit' })),
     box,
   );
 }
@@ -668,26 +674,39 @@ function fillSubmit() {
   const s = sections.submit;
   if (!s) return;
   if (S.submitted) { s.replaceChildren(...receipt()); return; }
-  const missing = A.questions.map((q, i) => ({ q, i })).filter(({ q }) => !hasFeedback(q));
-  const idOk = new RegExp(A.student_id_pattern).test(S.student.id || '');
-  const named = S.student.name && S.student.id && idOk;
+  // Only name and email are required. Skipped questions and empty
+  // feedback boxes just earn nothing.
+  const emailOk = new RegExp(A.student_email_pattern, 'i').test(S.student.email || '');
+  const named = S.student.name && S.student.email && emailOk;
+  const aiDone = () => S.aiFeedback.trim().length > 0;
+  const fbStatus = (done) => ({ class: done ? 'yes' : 'skip', text: done ? 'Feedback ✓' : 'No feedback' });
+  const aiStatus = el('span', fbStatus(aiDone()));
   const items = [
-    el('li', {}, el('span', { text: 'Name and student ID' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : S.student.id && !idOk ? 'Check your ID' : 'Missing' })),
+    el('li', {}, el('span', { text: 'Name and email' }), el('span', { class: named ? 'yes' : 'no', text: named ? 'Done' : S.student.email && !emailOk ? 'Check your email' : 'Missing' })),
     ...A.questions.map((q, i) => {
       const a = S.answers[q.id];
       const work = q.type === 'live'
-        ? (a.text.trim() ? `${points(a.score)}/100` : 'Not answered')
-        : (a.solved ? `Solved, ${plural(a.rounds.length, 'round')}` : `Not solved, ${plural(a.rounds.length, 'round')}`);
+        ? (a.text.trim() ? `${points(a.score)}/100` : 'Skipped')
+        : !a.rounds.length ? 'Skipped'
+        : `${a.solved ? 'Solved' : 'Not solved'}, ${plural(a.rounds.filter((r) => r.changed).length, 'round')}`;
       return el('li', {},
         el('span', {}, el('a', { href: `#${q.id}`, text: `Question ${i + 1}` }), ` · ${work}`),
-        el('span', { class: hasFeedback(q) ? 'yes' : 'no', text: hasFeedback(q) ? 'Feedback ✓' : 'Feedback missing' }));
+        el('span', fbStatus(hasFeedback(q))));
     }),
+    el('li', {}, el('span', {}, el('a', { href: '#ai-feedback', text: 'AI grading question' })), aiStatus),
   ];
   const consent = el('input', { type: 'checkbox', id: 'consent' });
   consent.checked = S.consent;
   consent.addEventListener('change', () => { S.consent = consent.checked; saveState(); });
+  // Updates its own status only. Re-rendering the section would drop focus.
+  const aiBox = el('textarea', { class: 'short', id: 'ai-feedback', placeholder: 'Fairer or less fair? More or less consistent? Would you trust it?' });
+  aiBox.value = S.aiFeedback;
+  aiBox.addEventListener('input', () => {
+    S.aiFeedback = aiBox.value; saveState();
+    const st = fbStatus(aiDone()); aiStatus.className = st.class; aiStatus.textContent = st.text;
+  });
   const submit = el('button', { class: 'btn', type: 'button', text: 'Submit assignment' });
-  submit.disabled = A.closed || !named || missing.length > 0;
+  submit.disabled = A.closed || !named;
   const errorBox = el('div');
   submit.addEventListener('click', async () => {
     submit.disabled = true; submit.textContent = 'Submitting…';
@@ -699,7 +718,7 @@ function fillSubmit() {
           ? { type: 'live', text: a.text, last_live_score: a.score, hints: a.hints, resets: S.resets[q.id] || 0 }
           : { type: 'correction', ai_answer: a.ai_answer, rounds: a.rounds, solved: a.solved, fixed_count: a.fixed_count, fixed: a.fixed, last_progress: a.progress, resets: S.resets[q.id] || 0 };
       }
-      S.submitted = await api('/api/submit', { student: S.student, session_id: S.sessionId, started_at: S.startedAt, restarts: S.restarts || 0, consent: S.consent, answers, feedback: S.feedback });
+      S.submitted = await api('/api/submit', { student: S.student, session_id: S.sessionId, started_at: S.startedAt, restarts: S.restarts || 0, consent: S.consent, answers, feedback: S.feedback, ai_grading_feedback: S.aiFeedback });
       saveState(); renderPage();
       document.getElementById('submit').scrollIntoView({ block: 'start' });
     } catch (e) {
@@ -713,9 +732,12 @@ function fillSubmit() {
     el('label', { class: 'consent', for: 'consent' }, consent,
       el('span', {}, el('strong', { text: 'Claude Code may help grade my work. ' }),
         'A TA reviews every grade. Unchecked means graded by hand.')),
+    el('div', { class: 'feedback' },
+      el('label', { class: 'field', for: 'ai-feedback' }, 'How do you feel about AI grading your work, compared with a human grader? · ', el('span', { class: 'credit', text: '1 credit' })),
+      aiBox),
     errorBox,
     el('div', { class: 'row' },
-      el('span', { class: 'small muted', text: A.closed ? 'This assignment is closed.' : missing.length ? `Feedback missing on ${plural(missing.length, 'question')}.` : named ? '' : S.student.id && !idOk ? `Student ID must be ${A.student_id_hint}.` : 'Add your name and ID at the top.' }),
+      el('span', { class: 'small muted', text: A.closed ? 'This assignment is closed.' : named ? 'You can submit with skipped questions or empty feedback boxes.' : S.student.email && !emailOk ? `Use ${A.student_email_hint}.` : 'Add your name and email at the top.' }),
       submit),
   );
 }
@@ -725,6 +747,7 @@ function receipt() {
   const rows = A.questions.map((q, i) => {
     const s = d.server_scores[q.id] || {};
     const detail = s.error ? `Not scored: ${s.error}`
+      : s.attempted === false ? 'Skipped'
       : q.type === 'live' ? `Jev ${points(s.score)}/100`
       : `Score ${points(s.progress)}/100${s.solved ? ' · solved' : ''}`;
     return el('tr', {}, el('td', { text: `${i + 1}. ${q.title}` }), el('td', { text: detail }));
@@ -739,7 +762,7 @@ function receipt() {
     el('h2', { id: 'submit-title', text: 'Submitted' }),
     el('p', { class: 'muted', style: 'margin:0' }, 'ID ', el('strong', { style: 'font-family:var(--font-mono)', text: d.submission_id })),
     el('div', { style: 'overflow-x:auto' }, el('table', { class: 'receipt' }, el('tbody', {}, rows))),
-    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${A.questions.length}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.` }),
+    el('p', { class: 'small muted', style: 'margin:0', text: `Recorded scores. Feedback: ${d.feedback_credits}/${d.feedback_total || A.questions.length + 1}. Claude Code grading: ${d.record.consent_claude_code_grading ? 'yes' : 'no'}.` }),
     el('div', { class: 'row' }, download),
   ];
 }

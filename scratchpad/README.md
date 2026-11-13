@@ -17,6 +17,11 @@ a coffee-shop question, so they no longer match the running app.
   fix-the-AI question for the student: direct requests, prompt injection,
   questions to the AI, and pointing at sentences without reasons. A leak
   is any mistake fixed that the note did not explain. Result: 0 of 7.
+- `partial_fix_test.py`: Fixes one claim per note, in short, natural
+  wording, in two orders per fix-the-AI question. Each correct note must
+  add one share of the score, and the last note must solve the question.
+  It calls the backend directly, so it needs no server. Result: 4 of 4
+  paths pass.
 
 - `efficacy_test.py`: Measures how cosine similarity tracks answer
   quality. Compares keyword-dense wrong answers against correctly-reasoned

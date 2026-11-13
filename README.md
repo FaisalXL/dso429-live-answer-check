@@ -11,9 +11,15 @@ TypeSafe, scores each answer while the student works.
   points out. Jev scores each new version and checks each planted
   mistake.
 
-After each question, a feedback box earns 1 credit for any non-empty
-answer. At the end, a checkbox asks if Claude Code may help grade the
-assignment. If the student leaves it unchecked, a person grades it by hand.
+After each question, a feedback box asks what the student thought of
+it. Any non-empty answer earns 1 credit. At the end, a checkbox asks if
+Claude Code may help grade the assignment. If the student leaves it
+unchecked, a person grades it by hand. A last feedback box asks how the
+student feels about AI grading compared with a human grader. It also
+earns 1 credit.
+
+Students can skip any question or feedback box. Only a name and an email
+are required to submit.
 
 **Status:** Ready for an extra-credit run. The four questions are about
 Pedalwise, a fictional bike-share company. Edit them in
@@ -53,9 +59,9 @@ Copy `.env.example` to `.env`. Set these values:
 - `CLOSES_AT`: The server refuses submissions after this time. Use the
   form `2026-11-22T23:59:00-08:00`. A time with no offset is Los Angeles
   time. A bad value stops the server at startup.
-- `STUDENT_ID_PATTERN`: A regular expression that each student ID must
-  match. Default: 10 digits.
-- `STUDENT_ID_HINT`: The ID format that error messages show.
+- `STUDENT_EMAIL_PATTERN`: A regular expression that each email must
+  match, ignoring case. Default: an `@usc.edu` address.
+- `STUDENT_EMAIL_HINT`: The email format that error messages show.
 - `SUBMISSIONS_DIR`: The folder for submission records. Default:
   `submissions/`.
 
@@ -74,7 +80,13 @@ Each entry in `backend/questions.json` has these fields:
   claim) and a `fix` (the correct idea). Jev counts a mistake as fixed
   only when the correct idea replaces the wrong claim.
 - Make the seed answer contain only the planted mistakes. A weak but
-  true sentence can stop a fully fixed answer from counting as solved.
+  true sentence, or a hidden extra wrong claim, can stop a fully fixed
+  answer from counting as solved.
+- Make each `fix` one idea: the idea that corrects its `error`. A fix
+  with two ideas gave no credit to a student who corrected the claim.
+  Make the `jev` instructions ask for the same core ideas, no more.
+  `scratchpad/partial_fix_test.py` checks that each correct note adds
+  one share of the score.
 
 **Write the `jev` instructions for each question by hand.** Name the
 ideas that a correct answer must contain. A generic version was tested
@@ -96,8 +108,10 @@ one Jev call at a time. Fast typing therefore never builds a backlog.
    It applies wrong notes too, so a wrong critique gets no credit.
 3. One Jev call scores the new answer and checks each planted mistake.
 4. The server checks the result. If a mistake became fixed that the
-   note did not explain, the server discards the change. This check
-   does not depend on the revision model obeying its rules.
+   note did not explain, the revision model tries once more and is told
+   to keep those claims. If the second try also fixes them, the server
+   discards the change. This check does not depend on the revision
+   model obeying its rules.
 
 The score is progress. Each fixed mistake is worth an equal share. The
 last share is Jev's score for the whole answer. A question is solved
@@ -121,14 +135,17 @@ model.
 
 **Submission.** The server scores every final answer again on submit.
 The stored scores therefore do not depend on the browser. The server
-writes each record to `SUBMISSIONS_DIR/<student-id>_<time>.json`. The
+writes each record to `SUBMISSIONS_DIR/<email>_<time>.json`. The
 student can also download a copy. The server refuses a submission after
-`CLOSES_AT`, or one with an ID that does not match `STUDENT_ID_PATTERN`.
+`CLOSES_AT`, or one with an email that does not match
+`STUDENT_EMAIL_PATTERN`. A skipped question scores 0 with no Jev call.
 
 **Export.** Open `/admin/export.csv`. Enter any user name and the
 `ADMIN_KEY` password. The CSV has one row per submission, newest first.
 A student can submit more than once. The `latest` column marks each
-student's newest row. Grade only the rows where `latest` is `yes`.
+student's newest row, by email. Grade only the rows where `latest` is
+`yes`. For each fix-the-AI question, the `notes` column lists each note
+the student sent and its result.
 
 ## Deployment
 
@@ -149,11 +166,13 @@ Download the CSV after the close time, then cancel the plan.
 
 ## Known limitations
 
-- **Identity.** Students type their own name and ID. The server checks
-  only the ID format.
-- **Round limit.** The browser enforces the round limit. "Start this
-  question over" gives the rounds back. The record counts every reset
-  and every full restart, so a grader can see them.
+- **Identity.** Students type their own name and email. The server
+  checks only the email format.
+- **Round limit.** The browser enforces the round limit. Only a note
+  that changes the answer uses a round. A student can send at most
+  three times `max_rounds` notes in all, which limits API cost. "Start
+  this question over" gives the rounds back. The record counts every
+  reset and every full restart, so a grader can see them.
 - **Jev instructions.** Each new question needs hand-written Jev
   instructions. See "Writing questions."
 

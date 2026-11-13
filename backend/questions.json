@@ -50,17 +50,17 @@
         {
           "id": "m2",
           "error": "Check the results every day and stop as soon as the new page is ahead, since that proves it is better.",
-          "fix": "Decide the number of visitors in advance and check the result once at the end, instead of stopping as soon as one page is ahead."
+          "fix": "Do not stop as soon as one page is ahead, because an early lead can be chance; run the test to a length decided in advance."
         },
         {
           "id": "m3",
           "error": "About 30 visitors per page is plenty, since any difference in sign-ups is real.",
-          "fix": "A few dozen visitors is not enough; the test needs enough visitors and a significance test before declaring a winner."
+          "fix": "About 30 visitors per page is too few, because a difference that small can be chance; the test needs more visitors."
         }
       ],
       "max_rounds": 5,
       "jev": {
-        "instructions": "Is the AI's answer fully correct? It must say to randomly assign visitors to the two pages, to decide the sample size in advance and not stop as soon as one page is ahead, and to use enough visitors and a significance test before declaring a winner. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "instructions": "Is the AI's answer fully correct? It must say three things: visitors are randomly assigned to the two pages; the test does not stop as soon as one page is ahead; and about 30 visitors per page is too few, because small differences can be chance. Each point needs only its core idea. Extra correct details, such as deciding the test length in advance or a significance test, are fine but not required. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
         "criteria": {
           "true": "Every claim is correct and all three points are covered.",
           "false": "Contains at least one false claim, or leaves out one of the three points."
@@ -73,28 +73,28 @@
       "topic": "Reinforcement learning",
       "title": "Fix the AI's reward plan",
       "prompt": "Pedalwise trains an AI support agent with reinforcement learning. The agent gets a reward of +1 every time it closes a rider's support ticket. Explain what could go wrong with this reward and what Pedalwise should do about it.",
-      "reference_answer": "Closed tickets are only a stand-in for what Pedalwise wants, which is riders whose problems are actually solved. An agent trained to maximize this reward can learn to close tickets without solving them, for example by closing a ticket as soon as the rider goes quiet. This is called reward hacking: the reward goes up while the real goal does not. Pedalwise should watch a guard metric that would reveal the problem, such as how often closed tickets get reopened or riders contact support again, and change the reward so hacking does not pay, for example by subtracting points when a ticket is reopened.",
-      "seed_answer": "Rewarding the agent for every closed ticket is a good plan, because more closed tickets always means happier riders. The agent will only close a ticket once the rider's problem is truly solved, since it understands what Pedalwise is trying to achieve. And because the reward keeps going up as the agent improves, Pedalwise only needs to watch that one number; there is nothing else to check.",
+      "reference_answer": "Closed tickets are only a stand-in for what Pedalwise wants, which is riders whose problems are actually solved. The agent does not understand that goal; it learns whatever earns reward, so it can learn to close tickets without solving them, for example by closing a ticket as soon as the rider goes quiet. This is called reward hacking: the reward goes up while the real goal does not. So Pedalwise should not watch the reward alone. It should also watch a guard metric that would reveal the problem, such as how often closed tickets get reopened. It can also change the reward so hacking does not pay, for example by subtracting points when a ticket is reopened.",
+      "seed_answer": "Rewarding the agent for every closed ticket is a good plan, because more closed tickets always means happier riders. The agent will only close a ticket once the rider's problem is truly solved, since it understands what Pedalwise is trying to achieve. And Pedalwise only needs to watch that one reward number; there is nothing else to check.",
       "mistakes": [
         {
           "id": "m1",
           "error": "More closed tickets always means happier riders, so the reward measures what Pedalwise wants.",
-          "fix": "Closed tickets are only a stand-in for solved problems; tickets can be closed without the rider's problem being solved."
+          "fix": "A closed ticket does not always mean a happier rider; the count of closed tickets is only a stand-in for what Pedalwise wants."
         },
         {
           "id": "m2",
           "error": "The agent will only close a ticket once the problem is truly solved, because it understands Pedalwise's goal.",
-          "fix": "The agent learns whatever earns reward, so it can learn to close tickets without solving them (reward hacking)."
+          "fix": "The agent does not understand the goal; it learns whatever earns reward, so it can learn to close tickets without solving them (reward hacking)."
         },
         {
           "id": "m3",
           "error": "Pedalwise only needs to watch the reward number; there is nothing else to check.",
-          "fix": "Pedalwise should track a guard metric such as how often tickets are reopened, and change the reward, for example by subtracting points for reopened tickets."
+          "fix": "Watching the reward is not enough; Pedalwise should also watch a guard metric, such as how often tickets get reopened."
         }
       ],
       "max_rounds": 5,
       "jev": {
-        "instructions": "Is the AI's answer fully correct? It must explain that closed tickets are only a stand-in for solved problems, that the agent can learn to close tickets without solving them (reward hacking), and that Pedalwise should watch a guard metric such as reopened tickets and change the reward. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
+        "instructions": "Is the AI's answer fully correct? It must say three things: closed tickets are only a stand-in for what Pedalwise wants, so more closed tickets do not always mean happier riders; the agent learns whatever earns reward and can close tickets without solving them (reward hacking); and Pedalwise should also watch a guard metric, such as reopened tickets. Each point needs only its core idea. Extra correct ideas, such as changing the reward, are fine but not required. Mark it false if any statement in the AI's answer is factually wrong, even if the rest is correct.",
         "criteria": {
           "true": "Every claim is correct and all three points are covered.",
           "false": "Contains at least one false claim, or leaves out one of the three points."

@@ -61,14 +61,17 @@ def parse_close_time(raw: str) -> datetime | None:
 
 
 CLOSE_TIME = parse_close_time(CLOSES_AT)
-STUDENT_ID_PATTERN = os.environ.get("STUDENT_ID_PATTERN", r"^\d{10}$")
-STUDENT_ID_HINT = os.environ.get("STUDENT_ID_HINT", "your 10-digit USC ID")
+# Students sign in with their email. Matching is case-insensitive.
+STUDENT_EMAIL_PATTERN = os.environ.get("STUDENT_EMAIL_PATTERN", r"^[A-Za-z0-9._%+-]+@usc\.edu$")
+STUDENT_EMAIL_HINT = os.environ.get("STUDENT_EMAIL_HINT", "your @usc.edu email")
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 ASSIGNMENT = json.loads(QUESTIONS_PATH.read_text())
 QUESTIONS = {q["id"]: q for q in ASSIGNMENT["questions"]}
+# One feedback box per question, plus one about AI grading.
+FEEDBACK_TOTAL = len(QUESTIONS) + 1
 
 # One shared client for the app's lifetime. A new client per request caused
 # an out-of-memory crash on Render's free tier.
@@ -156,11 +159,12 @@ def mistake_check(mistake: dict) -> dict:
             "Check one point in the AI's answer, and ignore every other part of it, "
             "including any other mistakes. Condition A: the answer does not make "
             f"this wrong claim anywhere: {mistake['error']} Mentioning the wrong "
-            "idea only to deny it is fine. Condition B: the answer states the core "
-            f"of this correct idea, in any wording: {mistake['fix']} Reasons and "
-            "examples in that description are optional; the core claim is enough. "
-            "The answer does not need to mention the wrong claim at all. Answer "
-            "true only if both conditions hold."
+            "idea only to deny it is fine. Condition B: on this point, the answer "
+            f"now says something correct that agrees with this idea: {mistake['fix']} "
+            "Any wording counts, and one correct sentence on the point is enough; "
+            "it does not need every detail or reason in that idea. The answer does "
+            "not need to mention the wrong claim at all. Answer true only if both "
+            "conditions hold."
         ),
         "criteria": {
             "true": "The wrong claim is gone and the correct idea is stated.",
@@ -242,14 +246,16 @@ CRITIQUE_CHECK = {
     "type": "noul",
     "instructions": (
         "Is the student's note a critique of the AI's answer that says which claim "
-        "is wrong and why it is wrong, or what the correct idea is? Answer false "
-        "for: a question to the AI; a request to rewrite, fix, or solve the answer; "
-        "a generic note such as 'fix it' or 'this is wrong'; and a note that only "
-        "points at a claim or sentence without saying why it is wrong. A critique "
-        "counts even if the student's reasoning is itself wrong."
+        "is wrong and why it is wrong, or what the correct idea is? A note that "
+        "states the correct idea for one point in the answer counts, even if it "
+        "does not quote the wrong claim. Answer false for: a question to the AI; "
+        "a request to rewrite, fix, or solve the answer that gives no idea of its "
+        "own; a generic note such as 'fix it' or 'this is wrong'; and a note that "
+        "only points at a claim or sentence without saying why it is wrong. A "
+        "critique counts even if the student's reasoning is itself wrong."
     ),
     "criteria": {
-        "true": "Names at least one claim and says why it is wrong or what should replace it.",
+        "true": "Names at least one claim and says why it is wrong, or states the correct idea for a point.",
         "false": "A question, a request to fix or rewrite, a generic note, or only points at claims without a reason.",
     },
 }
@@ -290,7 +296,14 @@ async def review_note(question: dict, current_answer: str, feedback: str) -> dic
     }
 
 
-async def revise_answer(question: dict, current_answer: str, feedback: str) -> str:
+async def revise_answer(question: dict, current_answer: str, feedback: str,
+                        keep: list[str] | None = None) -> str:
+    keep_note = ""
+    if keep:
+        # Used on a retry, after the first rewrite fixed claims the note
+        # did not explain.
+        keep_note = ("\n\nThe feedback does not address these claims. Keep the sentences "
+                     "that make them exactly as they are:\n" + "\n".join(f"- {k}" for k in keep))
     resp = await http_client.post(
         CHAT_URL,
         headers=auth_headers(),
@@ -303,7 +316,7 @@ async def revise_answer(question: dict, current_answer: str, feedback: str) -> s
                     "content": (
                         f"Exam question:\n{question['prompt']}\n\n"
                         f"Your current answer:\n{current_answer}\n\n"
-                        f"Student feedback:\n{feedback}\n\n"
+                        f"Student feedback:\n{feedback}{keep_note}\n\n"
                         "Revised answer:"
                     ),
                 },
@@ -364,8 +377,8 @@ def get_assignment():
         "demo_mode": DEMO_MODE,
         "closes_at": CLOSE_TIME.isoformat() if CLOSE_TIME else None,
         "closed": is_closed(),
-        "student_id_pattern": STUDENT_ID_PATTERN,
-        "student_id_hint": STUDENT_ID_HINT,
+        "student_email_pattern": STUDENT_EMAIL_PATTERN,
+        "student_email_hint": STUDENT_EMAIL_HINT,
         "dev_cosine": DEV_COSINE,
     }
 
@@ -504,7 +517,16 @@ async def correction_round(payload: dict):
             before or explained or (i < len(previous_fixed) and previous_fixed[i] is True)
             for i, (before, explained) in enumerate(zip(review["fixed_before"], review["explained"]))
         ]
-        if any(fixed and not ok for fixed, ok in zip(result["fixed"], allowed)):
+
+        def overreach(fixed: list[bool]) -> list[str]:
+            return [m["error"] for m, f, ok in zip(question["mistakes"], fixed, allowed) if f and not ok]
+
+        # One retry that names the claims to keep, so an honest note is not
+        # lost because the rewriter also touched a claim next to it.
+        if extra := overreach(result["fixed"]):
+            revised = await revise_answer(question, current_answer, feedback, keep=extra)
+            result = await score_correction(question, revised)
+        if overreach(result["fixed"]):
             return {
                 "revised_answer": current_answer, "feedback_specific": True,
                 "changed": False, "rejected": True,
@@ -524,10 +546,22 @@ async def correction_round(payload: dict):
 async def rescore(question: dict, answer: dict) -> dict:
     """Re-scores a submitted answer on the server, so the stored score
     doesn't depend on anything the browser reported."""
+    # Students may skip questions. A skipped question scores 0 without a
+    # Jev call.
+    if question["type"] == "live":
+        text = str(answer.get("text", ""))
+        if not text.strip():
+            return {"score": 0.0, "attempted": False}
+    else:
+        text = str(answer.get("ai_answer", "")) or question["seed_answer"]
+        if not answer.get("rounds"):
+            n = len(question["mistakes"])
+            return {"score": 0.0, "progress": 0.0, "fixed": [False] * n, "fixed_count": 0,
+                    "solved": False, "attempted": False}
     try:
         if question["type"] == "live":
-            return await score_live(question, str(answer.get("text", "")))
-        return await score_correction(question, str(answer.get("ai_answer", "")))
+            return await score_live(question, text)
+        return await score_correction(question, text)
     except Exception as exc:  # noqa: BLE001
         return {"error": describe_error(exc)}
 
@@ -536,16 +570,17 @@ async def rescore(question: dict, answer: dict) -> dict:
 async def submit(payload: dict):
     student = payload.get("student") or {}
     name = str(student.get("name", "")).strip()
-    student_id = str(student.get("id", "")).strip()
+    email = str(student.get("email", "")).strip().lower()
     if is_closed():
         raise HTTPException(status_code=403, detail="this assignment is closed")
-    if not name or not student_id:
-        raise HTTPException(status_code=400, detail="name and student ID are required")
-    if not re.fullmatch(STUDENT_ID_PATTERN, student_id):
-        raise HTTPException(status_code=400, detail=f"the student ID must be {STUDENT_ID_HINT}")
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="name and email are required")
+    if not re.fullmatch(STUDENT_EMAIL_PATTERN, email, flags=re.IGNORECASE):
+        raise HTTPException(status_code=400, detail=f"use {STUDENT_EMAIL_HINT}")
 
     answers = payload.get("answers") or {}
     feedback = payload.get("feedback") or {}
+    ai_grading_feedback = str(payload.get("ai_grading_feedback", "")).strip()[:4000]
     server_scores = dict(
         zip(
             QUESTIONS.keys(),
@@ -554,16 +589,20 @@ async def submit(payload: dict):
             ),
         )
     )
-    feedback_credits = sum(1 for qid in QUESTIONS if str(feedback.get(qid, "")).strip())
+    # 1 credit for each non-empty feedback box: one per question, plus the
+    # box about AI grading.
+    feedback_credits = (sum(1 for qid in QUESTIONS if str(feedback.get(qid, "")).strip())
+                        + (1 if ai_grading_feedback else 0))
 
     submitted_at = datetime.now(timezone.utc)
-    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", student_id)[:40] or "anon"
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", email)[:60] or "anon"
     submission_id = f"{safe_id}_{submitted_at.strftime('%Y%m%dT%H%M%SZ')}"
     record = {
         "submission_id": submission_id,
         "submitted_at": submitted_at.isoformat(),
-        "student": {"name": name, "id": student_id},
+        "student": {"name": name, "email": email},
         "consent_claude_code_grading": bool(payload.get("consent")),
+        "ai_grading_feedback": ai_grading_feedback,
         "client": {
             "session_id": payload.get("session_id"),
             "started_at": payload.get("started_at"),
@@ -586,8 +625,22 @@ async def submit(payload: dict):
         "submission_id": submission_id,
         "server_scores": server_scores,
         "feedback_credits": feedback_credits,
+        "feedback_total": FEEDBACK_TOTAL,
         "record": record,
     }
+
+
+def round_summary(r: dict) -> str:
+    """One fix-the-AI round for the CSV: the student's note and its outcome."""
+    if r.get("feedback_specific") is False:
+        outcome = "not specific"
+    elif r.get("rejected"):
+        outcome = "rejected"
+    elif r.get("changed") is False:
+        outcome = "no change"
+    else:
+        outcome = "applied"
+    return f"{r.get('round', '?')}. {r.get('feedback', '')} [{outcome}]"
 
 
 @app.get("/admin/export.csv")
@@ -602,23 +655,25 @@ def export_csv(_: None = Depends(require_admin)):
             continue
     records.sort(key=lambda r: r["submitted_at"], reverse=True)
     seen: set[str] = set()
-    columns = ["latest", "submitted_at", "name", "student_id", "feedback_credits",
-               "consent_claude_code_grading", "restarts"]
+    columns = ["latest", "submitted_at", "name", "email", "feedback_credits",
+               "consent_claude_code_grading", "ai_grading_feedback", "restarts"]
     for i, q in enumerate(ASSIGNMENT["questions"], 1):
         columns += [f"q{i}_feedback", f"q{i}_score", f"q{i}_answer"]
         if q["type"] == "correction":
-            columns += [f"q{i}_solved", f"q{i}_rounds", f"q{i}_resets"]
+            columns += [f"q{i}_solved", f"q{i}_rounds", f"q{i}_resets", f"q{i}_notes"]
     columns.append("submission_id")
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=columns)
     writer.writeheader()
     for r in records:
-        sid = r["student"]["id"]
+        # Records from before the switch to email hold a student ID instead.
+        sid = r["student"].get("email") or r["student"].get("id", "")
         row = {
             "latest": "yes" if sid not in seen else "no",
-            "submitted_at": r["submitted_at"], "name": r["student"]["name"], "student_id": sid,
+            "submitted_at": r["submitted_at"], "name": r["student"]["name"], "email": sid,
             "feedback_credits": r.get("feedback_credits", 0),
             "consent_claude_code_grading": "yes" if r.get("consent_claude_code_grading") else "no",
+            "ai_grading_feedback": r.get("ai_grading_feedback", ""),
             "restarts": (r.get("client") or {}).get("restarts", 0),
             "submission_id": r["submission_id"],
         }
@@ -634,6 +689,7 @@ def export_csv(_: None = Depends(require_admin)):
                 row[f"q{i}_solved"] = "yes" if score.get("solved") else "no"
                 row[f"q{i}_rounds"] = len(answer.get("rounds") or [])
                 row[f"q{i}_resets"] = answer.get("resets", 0)
+                row[f"q{i}_notes"] = " | ".join(round_summary(n) for n in answer.get("rounds") or [])
         writer.writerow(row)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
     return Response(
